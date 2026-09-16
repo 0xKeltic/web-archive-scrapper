@@ -6,7 +6,6 @@ import re
 import mimetypes
 from urllib.parse import urlparse, parse_qs
 from pathlib import Path
-import requests
 import config
 
 PORT = 8080
@@ -73,17 +72,13 @@ class CriminaliaServer(http.server.BaseHTTPRequestHandler):
                 self.send_asset_file(file_path)
                 return
                 
-            # Flexible on-the-fly fetch using 2id_ (closest capture in Wayback Machine)
-            wb_url = f'https://web.archive.org/web/2id_/https://criminalia.es/{rel}'
-            try:
-                resp = requests.get(wb_url, timeout=8, headers=config.DEFAULT_HEADERS)
-                if resp.status_code == 200 and len(resp.content) > 0:
-                    file_path.parent.mkdir(parents=True, exist_ok=True)
-                    file_path.write_bytes(resp.content)
-                    self.send_asset_file(file_path)
-                    return
-            except Exception:
-                pass
+            # Cascading fetch across all tiers
+            data = config.fetch_with_retry(f'https://criminalia.es/{rel}', is_binary=True)
+            if data:
+                file_path.parent.mkdir(parents=True, exist_ok=True)
+                file_path.write_bytes(data)
+                self.send_asset_file(file_path)
+                return
             self.send_error(404, f'Asset not found: {rel}')
             return
 
@@ -106,14 +101,10 @@ class CriminaliaServer(http.server.BaseHTTPRequestHandler):
             idx_file = config.RAW_HTML_DIR / 'indices' / f'{l}_{g}.html'
             
             if not idx_file.exists():
-                wb_url = f'https://web.archive.org/web/2id_/https://criminalia.es/resultados-de-la-busqueda/?l={l}&g={g}'
-                try:
-                    resp = requests.get(wb_url, timeout=10, headers=config.DEFAULT_HEADERS)
-                    if resp.status_code == 200:
-                        idx_file.parent.mkdir(parents=True, exist_ok=True)
-                        idx_file.write_text(resp.text, encoding='utf-8')
-                except Exception:
-                    pass
+                raw_data = config.fetch_with_retry(f'https://criminalia.es/resultados-de-la-busqueda/?l={l}&g={g}')
+                if raw_data:
+                    idx_file.parent.mkdir(parents=True, exist_ok=True)
+                    idx_file.write_text(raw_data, encoding='utf-8')
                     
             if idx_file.exists():
                 html = idx_file.read_text(encoding='utf-8', errors='ignore')
@@ -130,14 +121,10 @@ class CriminaliaServer(http.server.BaseHTTPRequestHandler):
             article_file = config.RAW_HTML_DIR / 'asesino' / f'{slug}.html'
             
             if not article_file.exists():
-                wb_url = f'https://web.archive.org/web/2id_/https://criminalia.es/asesino/{slug}/'
-                try:
-                    resp = requests.get(wb_url, timeout=12, headers=config.DEFAULT_HEADERS)
-                    if resp.status_code == 200:
-                        article_file.parent.mkdir(parents=True, exist_ok=True)
-                        article_file.write_text(resp.text, encoding='utf-8')
-                except Exception:
-                    pass
+                raw_data = config.fetch_with_retry(f'https://criminalia.es/asesino/{slug}/')
+                if raw_data:
+                    article_file.parent.mkdir(parents=True, exist_ok=True)
+                    article_file.write_text(raw_data, encoding='utf-8')
                     
             if article_file.exists():
                 html = article_file.read_text(encoding='utf-8', errors='ignore')
@@ -154,14 +141,10 @@ class CriminaliaServer(http.server.BaseHTTPRequestHandler):
             mat_file = config.RAW_HTML_DIR / 'material' / f'{slug}.html'
             
             if not mat_file.exists():
-                wb_url = f'https://web.archive.org/web/2id_/https://criminalia.es/material/{slug}/'
-                try:
-                    resp = requests.get(wb_url, timeout=12, headers=config.DEFAULT_HEADERS)
-                    if resp.status_code == 200 and len(resp.text) > 1000:
-                        mat_file.parent.mkdir(parents=True, exist_ok=True)
-                        mat_file.write_text(resp.text, encoding='utf-8')
-                except Exception:
-                    pass
+                raw_data = config.fetch_with_retry(f'https://criminalia.es/material/{slug}/')
+                if raw_data and len(raw_data) > 1000:
+                    mat_file.parent.mkdir(parents=True, exist_ok=True)
+                    mat_file.write_text(raw_data, encoding='utf-8')
                     
             if mat_file.exists():
                 html = mat_file.read_text(encoding='utf-8', errors='ignore')
@@ -172,7 +155,6 @@ class CriminaliaServer(http.server.BaseHTTPRequestHandler):
                 self.wfile.write(html_rewritten.encode('utf-8'))
                 return
             else:
-                # Friendly fallback message
                 not_found_page = f'''<!DOCTYPE html>
                 <html lang=\"es\">
                 <head>
@@ -182,9 +164,9 @@ class CriminaliaServer(http.server.BaseHTTPRequestHandler):
                 </head>
                 <body style=\"font-family: sans-serif; padding: 40px; background: #f8f9fa;\">
                     <div style=\"max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);\">
-                        <h2 style=\"color: #b91c1c;\">Fotografías no disponibles en Web Archive</h2>
-                        <p>La galería complementaria <code>{slug}</code> no fue capturada por los rastreadores de Internet Archive en el momento de indexar la web.</p>
-                        <p>Sin embargo, el artículo principal y las fotos del expediente siguen estando disponibles.</p>
+                        <h2 style=\"color: #b91c1c;\">Fotografías no disponibles en los archivos</h2>
+                        <p>La galería complementaria <code>{slug}</code> no fue capturada por los rastreadores en Wayback Machine ni en archive.today.</p>
+                        <p>Sin embargo, el artículo principal y los datos del caso siguen estando disponibles.</p>
                         <p><a href=\"javascript:history.back()\" style=\"display: inline-block; background: #b91c1c; color: white; padding: 8px 16px; text-decoration: none; border-radius: 4px;\">← Volver al artículo</a></p>
                     </div>
                 </body>
@@ -204,14 +186,10 @@ class CriminaliaServer(http.server.BaseHTTPRequestHandler):
                 act_file = config.RAW_HTML_DIR / 'actualidad' / f'{parts[1]}.html'
                 
             if not act_file.exists():
-                wb_url = f'https://web.archive.org/web/2id_/https://criminalia.es{url_path}'
-                try:
-                    resp = requests.get(wb_url, timeout=10, headers=config.DEFAULT_HEADERS)
-                    if resp.status_code == 200:
-                        act_file.parent.mkdir(parents=True, exist_ok=True)
-                        act_file.write_text(resp.text, encoding='utf-8')
-                except Exception:
-                    pass
+                raw_data = config.fetch_with_retry(f'https://criminalia.es{url_path}')
+                if raw_data:
+                    act_file.parent.mkdir(parents=True, exist_ok=True)
+                    act_file.write_text(raw_data, encoding='utf-8')
                     
             if act_file.exists():
                 html = act_file.read_text(encoding='utf-8', errors='ignore')
