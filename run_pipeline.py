@@ -22,10 +22,13 @@ def main():
         step2.main()
         
     if args.step == 3 or args.all:
-        logger.info('>>> PASO 3: Descargando paginas HTML...')
+        logger.info('>>> PASO 3: Descargando paginas HTML (articulos, galerias, actualidad)...')
         import importlib
         step3 = importlib.import_module('03_download_html')
         step3.download_articles()
+        logger.info('>>> PASO 3b: Descargando paginas independientes e institucionales (contacto, colabora, ultimas entradas, noticias)...')
+        step3b = importlib.import_module('03b_download_standalone')
+        step3b.download_standalone_pages()
         
     if args.step == 4 or args.all:
         logger.info('>>> PASO 4: Descargando archivos estaticos (CSS, JS, Imagenes)...')

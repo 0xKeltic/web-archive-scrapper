@@ -1,4 +1,4 @@
-﻿# Criminalia.es Preservation Suite - Technical Architecture & Developer Manual
+# Criminalia.es Preservation Suite - Technical Architecture & Developer Manual
 
 A comprehensive guide to the extraction, multi-tier historical recovery, local replication, and structured export pipeline for the true-crime encyclopedia **Criminalia.es**.
 
@@ -59,7 +59,7 @@ To solve this, our suite implements a **3-Tier Cascading Fallback**:
 
 ## 3. Pipeline Modules & Execution Flow
 
-The suite is broken down into five decoupled, idempotent modules orchestrated by `run_pipeline.py`:
+The suite is broken down into modular, decoupled, idempotent scripts orchestrated by `run_pipeline.py`:
 
 ```
 ┌──────────────────────────┐
@@ -74,6 +74,11 @@ The suite is broken down into five decoupled, idempotent modules orchestrated by
              ▼
 ┌──────────────────────────┐
 │  03_download_html.py     │ ──► Downloads 856 main articles + ~800 photo galleries
+└──────────────────────────┘
+             │
+             ▼
+┌──────────────────────────┐
+│ 03b_download_standalone  │ ──► Downloads 230+ institutional, country feeds & news posts
 └──────────────────────────┘
              │
              ▼
@@ -105,6 +110,11 @@ The suite is broken down into five decoupled, idempotent modules orchestrated by
 - Automatically scans each downloaded article for related photo gallery links (`/material/<slug>-fotos/`) and queues them for download.
 - Idempotent: Skips files already stored locally with non-zero size.
 
+#### `03b_download_standalone.py`
+- Discovers all standalone pages across the site (institutional pages like `/contacto/`, `/colabora/`, `/ultimas-entradas/`, `/politica-de-cookies/`, regional country hubs `/actualidad/<pais>/`, date archives, and standalone crime news posts).
+- Saves catalog to `data/manifests/standalone_manifest.json`.
+- Downloads all pages into `data/raw_html/paginas/<slug>.html`.
+
 #### `04_download_assets.py`
 - Scans all downloaded HTML files for image tags (`<img>`, `data-src`, `data-lazy-src`).
 - Downloads thousands of crime scene photos, mugshots, newspaper clippings, and evidence documents into `data/assets/wp-content/`.
@@ -125,13 +135,17 @@ To verify the scraped archive and browse the historical content without needing 
 ### Capabilities:
 - **Port 8080:** Accessible at `http://localhost:8080/`.
 - **Exact Visual Reproduction:** Serves the original homepage (`index.html`), slider, typography, and red header.
-- **Dynamic Asset Rewriting:** Intercepts legacy `https://criminalia.es/wp-content/...` URLs and remaps them to local disk files.
-- **On-The-Fly Historical Fetching:** If a user clicks an article or image that hasn't been downloaded yet, the server automatically fetches it in the background using the 3-tier cascade and caches it on disk.
-- **Live Status Dashboard (`/status` & `/progreso`):** Renders real-time progress bars with an auto-refresh cycle every 3 seconds:
-  - Main biographical articles count (out of 850).
-  - Photo gallery count (out of 798).
-  - Downloaded asset count.
-  - Exported Markdown count.
+- **Dynamic Asset & Link Rewriting:** Intercepts legacy `https://criminalia.es/...` and `wp-criminalia/...` URLs, converting them into relative local paths.
+- **Universal Catch-All Routing:** Any link clicked anywhere on the site (`/contacto/`, `/colabora/`, `/ultimas-entradas/`, crime news, country feeds) is dynamically resolved, downloaded on the fly if missing, and cached on disk.
+- **Interactive Live Status Dashboard (`/status` & `/progreso`):**
+  - Interactive JavaScript client-side countdown timer (2s → 1s → Refreshing...).
+  - Real-time progress bars for:
+    - Main biographical articles count (out of 850).
+    - Photo gallery count (out of 798).
+    - Institutional & standalone pages stored in disk.
+    - Actualidad articles.
+    - Downloaded media assets on disk.
+    - Exported Markdown articles.
 
 ---
 
