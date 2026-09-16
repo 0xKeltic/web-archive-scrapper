@@ -100,6 +100,7 @@ web-archive-scrapper/
 ├── requirements.txt          # Dependencias
 ├── README.md                 # Documentación en español
 ├── MANUAL.md                 # Comprehensive English technical manual
+├── ROADMAP_UNIVERSAL_SCRAPER.md # Hoja de ruta para convertir la suite en herramienta 100% universal
 └── data/                     # Datos locales (ignorado en Git para ligereza)
     ├── manifests/            # articles_manifest.json, standalone_manifest.json, assets_manifest.json
     ├── raw_html/             # index.html, asesino/*.html, material/*.html, paginas/*.html
@@ -111,4 +112,5 @@ web-archive-scrapper/
 
 ## 📖 Documentación Avanzada
 
-Para una guía técnica detallada en inglés sobre la arquitectura, el protocolo de recuperación en cascada y las especificaciones de datos, consulta [MANUAL.md](MANUAL.md).
+* **Manual Técnico (Inglés):** Consulta [MANUAL.md](MANUAL.md) para especificaciones de arquitectura, fallbacks y formatos de datos.
+* **Hoja de Ruta Universal:** Consulta [ROADMAP_UNIVERSAL_SCRAPER.md](ROADMAP_UNIVERSAL_SCRAPER.md) para los pasos técnicos para utilizar este scraper con **cualquier otro sitio web**.
