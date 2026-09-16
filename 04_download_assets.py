@@ -56,6 +56,16 @@ def scan_html_files_for_images():
 
 def download_all_assets():
     manifest_file = config.MANIFESTS_DIR / 'assets_manifest.json'
+    missing_file = config.MANIFESTS_DIR / 'missing_assets.json'
+    
+    missing_assets = set()
+    if missing_file.exists():
+        try:
+            with open(missing_file, 'r', encoding='utf-8') as f:
+                missing_assets = set(json.load(f))
+        except Exception:
+            pass
+
     manifest_assets = set()
     if manifest_file.exists():
         with open(manifest_file, 'r', encoding='utf-8') as f:
@@ -69,6 +79,7 @@ def download_all_assets():
     
     total = len(all_target_urls)
     logger.info(f'Iniciando descarga de {total} assets (CSS, JS, Fuentes, Fotografias)...')
+    logger.info(f'Memoria de cache: {len(missing_assets)} recursos marcados previamente como no archivados (404).')
     
     css_extra_assets = set()
     success = 0
@@ -80,6 +91,10 @@ def download_all_assets():
         target_file = config.ASSETS_DIR / rel_path
         
         if target_file.exists() and target_file.stat().st_size > 0:
+            skipped += 1
+            continue
+            
+        if rel_path in missing_assets:
             skipped += 1
             continue
             
@@ -106,6 +121,13 @@ def download_all_assets():
                     pass
         else:
             failed += 1
+            missing_assets.add(rel_path)
+            if failed % 25 == 0:
+                try:
+                    with open(missing_file, 'w', encoding='utf-8') as f:
+                        json.dump(sorted(list(missing_assets)), f, indent=2, ensure_ascii=False)
+                except Exception:
+                    pass
         time.sleep(0.25)
         
     if css_extra_assets:
@@ -114,6 +136,12 @@ def download_all_assets():
             download_asset(ext_url, is_binary=True)
             time.sleep(0.25)
             
+    try:
+        with open(missing_file, 'w', encoding='utf-8') as f:
+            json.dump(sorted(list(missing_assets)), f, indent=2, ensure_ascii=False)
+    except Exception:
+        pass
+        
     logger.success(f'Descarga de assets finalizada: {success} nuevos, {skipped} ya existian, {failed} fallidos.')
 
 if __name__ == '__main__':
