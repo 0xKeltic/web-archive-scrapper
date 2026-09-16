@@ -1,0 +1,22 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.class
+
+# Caches and logs
+*.log
+.cache/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Environment
+.venv/
+env/
+venv/
+ENV/
+
+# Scraped website data (kept locally on user machine)
+data/
