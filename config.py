@@ -59,6 +59,23 @@ def init_project(target_url: str, custom_timestamp: str = None, depth: int = 3):
     global PROJECT_DATA_DIR, MANIFESTS_DIR, RAW_HTML_DIR, ASSETS_DIR, CONTENT_DIR
 
     target_url = target_url.strip()
+    
+    # Handle direct Wayback Machine URLs (e.g., https://web.archive.org/web/20230711124744/https://ejemplo.com)
+    wb_match = re.search(r'https?://web\.archive\.org/web/(\d+)[a-z_]*/(https?://.+)', target_url)
+    if wb_match:
+        if not custom_timestamp:
+            custom_timestamp = wb_match.group(1)
+        target_url = wb_match.group(2)
+    else:
+        wb_match_simple = re.search(r'https?://web\.archive\.org/web/[^/]+/(https?://.+)', target_url)
+        if wb_match_simple:
+            target_url = wb_match_simple.group(1)
+
+    # Handle direct archive.today / archive.ph URLs
+    archive_match = re.search(r'https?://archive\.(?:is|today|ph|md|li|vn)/(?:[0-9a-zA-Z]+/)?(https?://.+)', target_url)
+    if archive_match:
+        target_url = archive_match.group(1)
+
     if not target_url.startswith('http'):
         target_url = 'https://' + target_url
 
