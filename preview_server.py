@@ -25,14 +25,15 @@ def rewrite_html_universal(html: str, domain: str) -> str:
     pattern_bare = rf'https?://(?:www\.)?{re.escape(domain)}(?=[\"\x27\s#\?])'
     html = re.sub(pattern_bare, '/', html, flags=re.IGNORECASE)
 
-    # 3. Fix common lazy-loaded image patterns
-    html = re.sub(r'src=[\"\x27][^\"\x27]*lazy_placeholder[^\"]*[\"\x27]\s+data-src=([\"\x27][^\"\x27]+[\"\x27])', r'src=\1', html)
-    html = re.sub(r'data-lazy-src=([\"\x27][^\"\x27]+[\"\x27])', r'src=\1', html)
+    # 3. Robust fix for lazy-loaded images (a3-lazy-load, WP-Rocket, etc.)
+    html = re.sub(r'data-src=[\"\x27]([^\"]+)[\"\x27]', r'src="\1" data-src="\1"', html)
+    html = re.sub(r'data-lazy-src=[\"\x27]([^\"]+)[\"\x27]', r'src="\1"', html)
     
     return html
 
 class UniversalPreviewHandler(http.server.BaseHTTPRequestHandler):
-    domain = config.CURRENT_DOMAIN
+    def do_HEAD(self):
+        self.do_GET()
 
     def log_message(self, format, *args):
         # Concise logging
@@ -140,29 +141,33 @@ class UniversalPreviewHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(status_html.encode('utf-8'))
             return
 
-        # 2. SERVE DIRECT ASSETS (/assets/...)
-        if url_path.startswith('/assets/'):
-            rel_asset = url_path[len('/assets/'):]
+        # 2. SERVE AND AUTO-RESCUE STATIC ASSETS (Images, CSS, JS, Fonts, Media)
+        ext = Path(url_path).suffix.lower()
+        is_asset = (
+            url_path.startswith('/assets/') or
+            ext in ('.css', '.js', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.ico', '.woff', '.woff2', '.ttf', '.eot', '.otf', '.mp3', '.mp4', '.pdf', '.map') or
+            any(url_path.startswith(p) for p in ('/wp-content/', '/wp-includes/', '/static/', '/media/', '/images/', '/img/', '/css/', '/js/', '/fonts/'))
+        )
+
+        if is_asset:
+            rel_asset = url_path[len('/assets/'):] if url_path.startswith('/assets/') else url_path.lstrip('/')
             local_asset = config.ASSETS_DIR / rel_asset
-            if local_asset.exists() and local_asset.is_file():
+            if local_asset.exists() and local_asset.is_file() and local_asset.stat().st_size > 0:
                 self.send_asset_file(local_asset)
                 return
-            
+
             # Dynamic on-the-fly rescue for missing assets
             original_asset_url = f'https://{config.CURRENT_DOMAIN}/{rel_asset}'
-            logger.info(f'[On-The-Fly] Descargando asset faltante: {rel_asset}...')
+            logger.info(f'[On-The-Fly Asset] Descargando imagen o recurso en vivo: {rel_asset}...')
             data = config.fetch_with_retry(original_asset_url, is_binary=True)
             if data:
                 local_asset.parent.mkdir(parents=True, exist_ok=True)
                 local_asset.write_bytes(data)
                 self.send_asset_file(local_asset)
                 return
-
-        # Check if requested path maps to an asset directly (e.g. /static/..., /wp-content/...)
-        direct_asset = config.ASSETS_DIR / url_path.lstrip('/')
-        if direct_asset.exists() and direct_asset.is_file():
-            self.send_asset_file(direct_asset)
-            return
+            else:
+                self.send_error(404, f'Asset no encontrado en archivos: {rel_asset}')
+                return
 
         # 3. SERVE HTML PAGES
         # Map URL to HTML file
@@ -239,9 +244,9 @@ class UniversalPreviewHandler(http.server.BaseHTTPRequestHandler):
 
 def run_server(port: int = 8080):
     handler = UniversalPreviewHandler
-    socketserver.TCPServer.allow_reuse_address = True
-    with socketserver.TCPServer(("", port), handler) as httpd:
-        logger.success(f'Servidor local universal iniciado para {config.CURRENT_DOMAIN}')
+    http.server.ThreadingHTTPServer.allow_reuse_address = True
+    with http.server.ThreadingHTTPServer(("", port), handler) as httpd:
+        logger.success(f'Servidor local universal multihilo iniciado para {config.CURRENT_DOMAIN}')
         logger.info(f'-> Web archivada: http://localhost:{port}/')
         logger.info(f'-> Monitor de estado: http://localhost:{port}/status')
         try:
