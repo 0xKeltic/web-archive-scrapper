@@ -121,9 +121,29 @@ def crawl_site_bfs(start_url: str, max_depth: int = 3, max_pages: int = 5000):
 
         logger.info(f'[{len(visited)}] [Nivel {depth}] Rastreando: {clean_url}')
         
-        html = config.fetch_with_retry(clean_url)
-        if not html or len(html) < 200:
-            continue
+        rel_path = config.url_to_relative_path(clean_url)
+        target_file = config.RAW_HTML_DIR / rel_path
+
+        html = None
+        if target_file.exists() and target_file.stat().st_size > 200:
+            try:
+                with open(target_file, 'r', encoding='utf-8', errors='ignore') as f:
+                    html = f.read()
+                logger.debug(f'[Cache Local] Usando HTML local: {rel_path}')
+            except Exception:
+                html = None
+
+        if not html:
+            html = config.fetch_with_retry(clean_url)
+            if not html or len(html) < 200:
+                continue
+            try:
+                target_file.parent.mkdir(parents=True, exist_ok=True)
+                with open(target_file, 'w', encoding='utf-8', errors='ignore') as f:
+                    f.write(html)
+            except Exception as e:
+                logger.debug(f'Error guardando HTML local de {clean_url}: {e}')
+            time.sleep(0.15)
 
         title = ''
         try:
@@ -144,15 +164,6 @@ def crawl_site_bfs(start_url: str, max_depth: int = 3, max_pages: int = 5000):
                                 queue.append((candidate, depth + 1))
         except Exception:
             pass
-
-        rel_path = config.url_to_relative_path(clean_url)
-        target_file = config.RAW_HTML_DIR / rel_path
-        try:
-            target_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(target_file, 'w', encoding='utf-8', errors='ignore') as f:
-                f.write(html)
-        except Exception as e:
-            logger.debug(f'Error guardando HTML local de {clean_url}: {e}')
 
         pages_catalog.append({
             'url': clean_url,
