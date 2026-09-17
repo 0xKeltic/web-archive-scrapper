@@ -117,18 +117,25 @@ def export_all():
             for a in data.get('articles', []):
                 articles_meta[a['slug']] = a
 
-    articles_dir = config.RAW_HTML_DIR / 'asesino'
-    all_htmls = list(articles_dir.glob('*.html'))
-    
-    logger.info('Iniciando parseo y exportacion de ' + str(len(all_htmls)) + ' articulos a Markdown y JSON...')
-    
+    articles_out = config.CONTENT_DIR / 'articles'
+    pages_out = config.CONTENT_DIR / 'pages'
+    actualidad_out = config.CONTENT_DIR / 'actualidad'
+    for d in (articles_out, pages_out, actualidad_out):
+        d.mkdir(parents=True, exist_ok=True)
+
     database = []
-    for idx, html_path in enumerate(all_htmls, 1):
+
+    # 1. Artículos Biográficos (Asesinos)
+    articles_dir = config.RAW_HTML_DIR / 'asesino'
+    all_htmls = list(articles_dir.glob('*.html')) if articles_dir.exists() else []
+    logger.info(f'Iniciando parseo de {len(all_htmls)} articulos biograficos a Markdown...')
+
+    for html_path in all_htmls:
         slug = html_path.stem
         meta = articles_meta.get(slug, {'slug': slug, 'category': 'crimen'})
-        
         parsed = parse_article(html_path, meta)
         database.append({
+            'type': 'asesino',
             'title': parsed['title'],
             'slug': parsed['slug'],
             'category': parsed['category'],
@@ -137,35 +144,101 @@ def export_all():
             'url': parsed['url'],
             'excerpt': parsed['content'][:250].replace('\n', ' ') + '...' if len(parsed['content']) > 250 else parsed['content']
         })
-        
-        md_file = config.CONTENT_DIR / 'articles' / (slug + '.md')
+        md_file = articles_out / f'{slug}.md'
         clean_title = parsed['title'].replace('\"', '\\\"')
         p_slug = parsed['slug']
         p_cat = parsed['category']
         p_img = parsed['featured_image']
         p_url = parsed['url']
         galleries_json = json.dumps(parsed['galleries'])
-        
         frontmatter = (
             '---\n'
-            + 'title: \"' + clean_title + '\"\n'
-            + 'slug: \"' + p_slug + '\"\n'
-            + 'category: \"' + p_cat + '\"\n'
-            + 'featured_image: \"' + p_img + '\"\n'
-            + 'galleries: ' + galleries_json + '\n'
-            + 'url: \"' + p_url + '\"\n'
-            + '---\n\n'
+            f'title: "{clean_title}"\n'
+            f'type: "asesino"\n'
+            f'slug: "{p_slug}"\n'
+            f'category: "{p_cat}"\n'
+            f'featured_image: "{p_img}"\n'
+            f'galleries: {galleries_json}\n'
+            f'url: "{p_url}"\n'
+            '---\n\n'
         )
         with open(md_file, 'w', encoding='utf-8') as f:
             f.write(frontmatter + parsed['content'])
-            
+
+    # 2. Artículos de Actualidad
+    actualidad_dir = config.RAW_HTML_DIR / 'actualidad'
+    all_act = list(actualidad_dir.glob('*.html')) if actualidad_dir.exists() else []
+    logger.info(f'Iniciando parseo de {len(all_act)} secciones de actualidad...')
+    for html_path in all_act:
+        slug = html_path.stem
+        parsed = parse_article(html_path, {'slug': slug, 'category': 'actualidad'})
+        database.append({
+            'type': 'actualidad',
+            'title': parsed['title'],
+            'slug': parsed['slug'],
+            'category': 'actualidad',
+            'featured_image': parsed['featured_image'],
+            'galleries': parsed['galleries'],
+            'url': f'https://criminalia.es/actualidad/{slug}/',
+            'excerpt': parsed['content'][:250].replace('\n', ' ') + '...' if len(parsed['content']) > 250 else parsed['content']
+        })
+        md_file = actualidad_out / f'{slug}.md'
+        clean_title = parsed['title'].replace('"', '\\"')
+        p_img = parsed['featured_image']
+        frontmatter = (
+            '---\n'
+            f'title: "{clean_title}"\n'
+            'type: "actualidad"\n'
+            f'slug: "{slug}"\n'
+            'category: "actualidad"\n'
+            f'featured_image: "{p_img}"\n'
+            f'url: "https://criminalia.es/actualidad/{slug}/"\n'
+            '---\n\n'
+        )
+        with open(md_file, 'w', encoding='utf-8') as f:
+            f.write(frontmatter + parsed['content'])
+
+    # 3. Páginas Institucionales y Noticias (paginas)
+    paginas_dir = config.RAW_HTML_DIR / 'paginas'
+    all_pages = list(paginas_dir.glob('*.html')) if paginas_dir.exists() else []
+    logger.info(f'Iniciando parseo de {len(all_pages)} paginas institucionales y noticias...')
+    for html_path in all_pages:
+        slug = html_path.stem
+        parsed = parse_article(html_path, {'slug': slug, 'category': 'pagina'})
+        database.append({
+            'type': 'pagina',
+            'title': parsed['title'],
+            'slug': parsed['slug'],
+            'category': 'pagina',
+            'featured_image': parsed['featured_image'],
+            'galleries': parsed['galleries'],
+            'url': f'https://criminalia.es/{slug}/',
+            'excerpt': parsed['content'][:250].replace('\n', ' ') + '...' if len(parsed['content']) > 250 else parsed['content']
+        })
+        md_file = pages_out / f'{slug}.md'
+        clean_title = parsed['title'].replace('"', '\\"')
+        p_img = parsed['featured_image']
+        frontmatter = (
+            '---\n'
+            f'title: "{clean_title}"\n'
+            'type: "pagina"\n'
+            f'slug: "{slug}"\n'
+            'category: "pagina"\n'
+            f'featured_image: "{p_img}"\n'
+            f'url: "https://criminalia.es/{slug}/"\n'
+            '---\n\n'
+        )
+        with open(md_file, 'w', encoding='utf-8') as f:
+            f.write(frontmatter + parsed['content'])
+
     db_file = config.CONTENT_DIR / 'database.json'
     with open(db_file, 'w', encoding='utf-8') as f:
         json.dump(database, f, ensure_ascii=False, indent=2)
-        
-    logger.success('Exportacion completa: ' + str(len(database)) + ' articulos procesados.')
-    logger.info('Articulos en Markdown: ' + str(config.CONTENT_DIR / 'articles'))
-    logger.info('Base de datos JSON: ' + str(db_file))
+
+    logger.success(f'Exportacion completa: {len(database)} documentos procesados ({len(all_htmls)} asesinos, {len(all_act)} actualidad, {len(all_pages)} paginas/noticias).')
+    logger.info(f'Directorio de contenido: {config.CONTENT_DIR}')
+    logger.info(f'Base de datos global: {db_file}')
 
 if __name__ == '__main__':
     export_all()
+

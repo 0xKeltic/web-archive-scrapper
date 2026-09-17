@@ -74,7 +74,7 @@ class CriminaliaServer(http.server.BaseHTTPRequestHandler):
             paginas_dir = config.RAW_HTML_DIR / 'paginas'
             paginas = len(list(paginas_dir.glob('*.html'))) if paginas_dir.exists() else 0
             assets_count = len(list((config.ASSETS_DIR).rglob('*.*')))
-            markdowns = len(list((config.CONTENT_DIR / 'articles').glob('*.md')))
+            markdowns = len(list((config.CONTENT_DIR).rglob('*.md')))
             p_asesinos = min(100, int((asesinos / 850) * 100))
             p_materiales = min(100, int((materiales / 798) * 100))
             
