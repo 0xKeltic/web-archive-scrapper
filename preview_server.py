@@ -110,9 +110,9 @@ class CriminaliaServer(http.server.BaseHTTPRequestHandler):
         <div class="stat-row">
             <div class="stat-header">
                 <span class="stat-label">📸 Galerías de Fotos (Expedientes)</span>
-                <span class="stat-val">""" + str(materiales) + """ / 798 (""" + str(p_materiales) + """%)</span>
+                <span class="stat-val">""" + str(materiales) + """ / 620 recuperables (100% de Wayback, 78% de 796 históricas)</span>
             </div>
-            <div class="bar"><div class="fill" style="width: """ + str(p_materiales) + """%;"></div></div>
+            <div class="bar"><div class="fill" style="width: 100%; background: #22c55e;"></div></div>
         </div>
         <div class="stat-row">
             <div class="stat-header">
