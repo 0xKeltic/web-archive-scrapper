@@ -157,17 +157,30 @@ def get_wayback_raw_url(original_url: str) -> str:
     return f'{WAYBACK_RAW_PREFIX}{cleaned}'
 
 def url_to_relative_path(url: str) -> str:
-    """Converts a URL path to a safe relative filesystem path."""
+    """Converts a URL path to a safe relative filesystem path ending in .html."""
     clean = clean_target_url(url)
     parsed = urlparse(clean)
-    path = unquote(parsed.path).lstrip('/')
-    if not path or path.endswith('/'):
-        path = path + 'index.html'
-    # Handle query parameters safely if present
+    raw_path = unquote(parsed.path).strip('/')
+    
+    query_part = ''
     if parsed.query:
         safe_query = re.sub(r'[^a-zA-Z0-9_-]', '_', parsed.query)
-        path = f"{path}_{safe_query}"
-    return path
+        query_part = f'_{safe_query}'
+        
+    if not raw_path:
+        return f'index{query_part}.html'
+        
+    # Check if there is already a standard web extension
+    ext = Path(raw_path).suffix.lower()
+    if ext in ('.html', '.htm', '.php', '.asp', '.aspx'):
+        stem = raw_path[:-len(ext)]
+        return f'{stem}{query_part}.html'
+    elif ext:
+        # Static file or other extension
+        return f'{raw_path}{query_part}'
+    else:
+        # Typical slug without extension (e.g. /asesino/ted-bundy or /contacto/)
+        return f'{raw_path}{query_part}.html'
 
 def fetch_single_request(url: str, is_binary: bool = False, max_retries: int = 3, backoff: float = 1.5, timeout: int = 20):
     """Executes single HTTP request with retries."""

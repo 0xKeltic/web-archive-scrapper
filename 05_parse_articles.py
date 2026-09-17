@@ -16,6 +16,9 @@ def rewrite_images_to_local_assets(markdown_text: str, domain: str) -> str:
         src = match.group(2).strip()
         clean = src.split('?')[0]
         
+        if 'lazy_placeholder' in clean or 'pixel.gif' in clean:
+            return ''
+
         # Check if it belongs to domain or starts with /
         if domain in clean or clean.startswith('/'):
             parsed = urlparse(clean)
@@ -73,12 +76,13 @@ def extract_article_universal(html: str, file_path: Path) -> dict:
             body_md = md(str(target_elem), heading_style='ATX', strip=['script', 'style'])
 
     # Find featured image fallback
-    if not image:
-        first_img = soup.find('img')
-        if first_img:
-            src = first_img.get('src') or first_img.get('data-src')
-            if src and not src.startswith('data:'):
+    if not image or 'lazy_placeholder' in image or 'pixel.gif' in image:
+        image = ''
+        for img in soup.find_all('img'):
+            src = img.get('data-src') or img.get('data-lazy-src') or img.get('src')
+            if src and not src.startswith('data:') and 'lazy_placeholder' not in src and 'pixel.gif' not in src:
                 image = config.clean_target_url(src)
+                break
 
     # Clean and rewrite image paths to local assets
     body_md = rewrite_images_to_local_assets(body_md, config.CURRENT_DOMAIN)
