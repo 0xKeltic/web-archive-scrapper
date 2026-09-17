@@ -2,3 +2,6 @@ requests>=2.31.0
 beautifulsoup4>=4.12.0
 lxml>=5.0.0
 loguru>=0.7.0
+trafilatura>=1.6.0
+markdownify>=0.11.6
+tqdm>=4.66.0

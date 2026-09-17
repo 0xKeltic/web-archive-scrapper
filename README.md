@@ -1,26 +1,31 @@
-# ⚖️ Criminalia.es - Web Archive Scraper & Local Preservation Suite
+# 🌐 Universal Web Archive Scraper & Rebuilder Suite
 
-Herramienta integral para rescatar, preservar y estructurar el 100% de la enciclopedia del crimen **Criminalia.es** (creada por Juan Ignacio Blanco) desde **The Internet Archive (Wayback Machine)** y **archive.today (archive.ph)**.
+Herramienta universal de preservación digital capaz de rescatar, reconstruir localmente y convertir a Markdown estructurado **cualquier sitio web caído** a partir de **The Internet Archive (Wayback Machine)** y la red **archive.today (archive.ph)**.
+
+Originalmente desarrollada y probada en producción con el rescate del 100% de la enciclopedia criminal [Criminalia.es](https://github.com/0xKeltic/criminalia), esta suite ha sido completamente universalizada para operar de manera autónoma y agnóstica con cualquier dominio.
 
 ---
 
 ## 🌟 Características Principales
 
-* **Mapeo Completo del Sitio (856 contenidos):**
-  * Descarga y análisis de los **78 índices alfabéticos** (26 letras x 3 categorías: *Hombres*, *Mujeres*, *Crímenes*) y la sección *Actualidad*.
+* **Universal y Agnóstica de Plataforma:**
+  * Funciona con cualquier gestor de contenidos (WordPress, Drupal, Joomla, Ghost, sitios estáticos o hechos a medida).
+  * Soporta múltiples webs archivadas simultáneamente en espacios aislados (`data/<dominio>/...`).
+* **Descubrimiento Inteligente de URLs:**
+  * **Detección de Sitemaps:** Localiza e ingiere automáticamente `/sitemap.xml`, `/sitemap_index.xml` y directivas en `/robots.txt` archivados.
+  * **Crawler Recursivo por Grafos (BFS):** Rastrea enlaces internos nivel a nivel hasta la profundidad configurada (`--depth`).
 * **Motor de Rescate en Cascada de 3 Niveles:**
-  * **Nivel 1:** Snapshot oficial de Wayback Machine (11 de julio de 2023).
-  * **Nivel 2 (Histórico Total):** Si devuelve 404, busca automáticamente en todas las capturas entre **2015 y 2022** con comodín `2id_` y prueba de protocolos `http`/`https`.
-  * **Nivel 3 (archive.today):** Si no existe en Wayback Machine, consulta automáticamente la red de `archive.is` / `archive.ph` con cabeceras de navegador reales.
-* **Preservación Integral Dinámica del 100% de la Web:**
-  * No solo descarga asesinos (`/asesino/`) y galerías (`/material/`), sino **toda la web**: páginas institucionales (`/contacto/`, `/colabora/`, `/ultimas-entradas/`, `/politica-de-cookies/`), secciones regionales (`/actualidad/<pais>/`), archivos por fecha y artículos de crónica negra independientes.
-* **Servidor de Previsualización Dinámico Universal (`preview_server.py`):**
-  * Replica la **portada real** de Criminalia con sus estilos CSS originales, cabecera, slider fotográfico y abecedarios en `http://localhost:8080`.
-  * Enrutador universal dinámico: cualquier enlace o página que visites se sirve desde el disco local o se **descarga al vuelo en 1 segundo** con el motor de rescate en cascada.
-* **Panel de Progreso en Vivo con Cuenta Regresiva (`/status`):**
-  * Dashboard visual en tiempo real en `http://localhost:8080/status` con un temporizador dinámico decreciente de auto-refresco (2s → 1s → Refrescando...) y métricas completas de expedientes, fotos, páginas institucionales y Markdown.
-* **Conversión Estructurada a Markdown y JSON:**
-  * Cada biografía se limpia de código obsoleto y se exporta a formato Markdown (`.md`) con Frontmatter YAML y a un catálogo global `database.json`, listos para alimentar una web moderna en **Next.js** o **Astro**.
+  * **Nivel 1:** Snapshot oficial en timestamp seleccionado (o detectado automáticamente mediante la API CDX de Wayback).
+  * **Nivel 2 (Histórico Total):** Si devuelve 404, busca automáticamente en todo el historial con comodín `2id_` y prueba alternando protocolos `http`/`https`.
+  * **Nivel 3 (archive.today):** Si no existe en Wayback, consulta automáticamente la red `archive.is` / `archive.ph` con cabeceras de navegador reales.
+* **Extracción Heurística Inteligente a Markdown (Trafilatura + Markdownify):**
+  * Sin necesidad de configurar selectores CSS a mano: detecta automáticamente el titular, autor, fecha, imagen destacada y cuerpo del artículo eliminando anuncios y menús.
+  * Reescritura automática de rutas de imágenes a `/assets/...`.
+  * Genera Frontmatter YAML estandarizado y un catálogo unificado `database.json`.
+* **Servidor Local Universal y On-The-Fly Rescue (`preview_server.py`):**
+  * Visualiza cualquier web archivada en `http://localhost:8080/` con sus estilos CSS, tipografías e imágenes.
+  * Rescate al vuelo: si visitas una página o asset no descargado previamente, el servidor lo descarga e inyecta en 1 segundo.
+  * Panel de estado en tiempo real en `/status` con auto-refresco interactivo.
 
 ---
 
@@ -39,48 +44,56 @@ pip install -r requirements.txt
 
 ---
 
-## 💻 Uso del Pipeline
+## 💻 Uso de la CLI (`run_pipeline.py`)
 
-### Ejecución Completa Automática:
+### 1. Archivar un Sitio Web Completo:
 ```bash
-python run_pipeline.py --all
+# Archiva cualquier web detectando automáticamente el snapshot más reciente en Wayback:
+python run_pipeline.py --url https://ejemplo.com --all
+
+# Archivar con fecha histórica concreta de Wayback (ej: 12 de mayo de 2020):
+python run_pipeline.py --url https://ejemplo.com --date 20200512 --all
+
+# Ajustar profundidad de rastreo BFS (por defecto 3) y límite de páginas:
+python run_pipeline.py --url https://ejemplo.com --depth 4 --max-pages 10000 --all
 ```
 
-### Ejecución Modular por Pasos:
+### 2. Ejecución Modular por Pasos:
 ```bash
-# Paso 1: Descubrir sitemap y 78 índices alfabéticos
-python run_pipeline.py --step 1
+# Paso 1: Crawler BFS y descubrimiento de URLs internas
+python run_pipeline.py --url https://ejemplo.com --step 1
 
-# Paso 2: Inventario de assets (CSS, JS, fuentes e imágenes de plantilla)
-python run_pipeline.py --step 2
+# Paso 2: Inventario de assets (CSS, JS, tipografías e imágenes)
+python run_pipeline.py --url https://ejemplo.com --step 2
 
-# Paso 3: Descargar todos los HTMLs (856 artículos + galerías de fotos + páginas independientes)
-python run_pipeline.py --step 3
+# Paso 3: Descarga masiva de páginas HTML
+python run_pipeline.py --url https://ejemplo.com --step 3
 
-# Paso 3b (opcional independiente): Descargar páginas institucionales, noticias y actualidad
-python 03b_download_standalone.py
+# Paso 4: Descarga de assets estáticos y recursos multimedia
+python run_pipeline.py --url https://ejemplo.com --step 4
 
-# Paso 4: Descarga masiva de fotografías de expedientes y assets multimedia
-python run_pipeline.py --step 4
-
-# Paso 5: Parsear y exportar a Markdown (.md) y database.json
-python run_pipeline.py --step 5
+# Paso 5: Conversión heurística a Markdown (.md) y database.json
+python run_pipeline.py --url https://ejemplo.com --step 5
 ```
 
-> **Nota:** Todos los módulos verifican si el archivo ya existe en disco antes de pedirlo a internet, por lo que puedes pausar con `Ctrl+C` y reanudar en cualquier momento sin perder progreso ni duplicar descargas.
+> **Nota:** Todos los módulos son estrictamente idempotentes. Si un archivo ya existe en disco con tamaño > 0, se omite automáticamente. Puedes pausar con `Ctrl+C` y reanudar en cualquier momento.
 
----
-
-## 🌐 Servidor Local y Dashboard de Estado
-
-Inicia el visualizador local en cualquier momento:
-
+### 3. Gestión y Visualización de Proyectos:
 ```bash
-python preview_server.py
+# Listar todos los sitios archivados en tu máquina:
+python run_pipeline.py --list
+
+# Ver estadísticas detalladas del proyecto activo:
+python run_pipeline.py --status
+
+# Lanzar servidor de previsualización local:
+python run_pipeline.py --url https://ejemplo.com --serve
+# O usando el puerto por defecto (8080):
+python preview_server.py --domain ejemplo.com
 ```
 
-* **Web Principal:** [http://localhost:8080](http://localhost:8080) — Navega por la enciclopedia con el diseño y fotos originales. Cualquier enlace (`/contacto/`, `/colabora/`, `/ultimas-entradas/`, etc.) se resuelve dinámicamente.
-* **Panel de Progreso en Vivo:** [http://localhost:8080/status](http://localhost:8080/status) — Muestra en tiempo real las estadísticas exactas de descarga con cuenta regresiva interactiva (2s).
+* **Navegar por la Web:** [http://localhost:8080](http://localhost:8080)
+* **Monitor en Vivo:** [http://localhost:8080/status](http://localhost:8080/status)
 
 ---
 
@@ -88,29 +101,63 @@ python preview_server.py
 
 ```
 web-archive-scrapper/
-├── config.py                 # Configuración central y motor de rescate en 3 niveles
-├── 01_discover_sitemap.py    # Fase 1: Mapeo de índices alfabéticos (A-Z)
-├── 02_discover_assets.py     # Fase 2: Mapeo de estilos CSS, JS y fuentes
-├── 03_download_html.py       # Fase 3: Descarga de artículos y galerías
-├── 03b_download_standalone.py# Fase 3b: Descarga de páginas institucionales y noticias
-├── 04_download_assets.py     # Fase 4: Descarga de miles de fotografías de crímenes
-├── 05_parse_articles.py      # Fase 5: Conversión a Markdown y catálogo JSON
-├── preview_server.py         # Servidor local con renderizado y descarga al vuelo
-├── run_pipeline.py           # Orquestador interactivo / CLI
-├── requirements.txt          # Dependencias
-├── README.md                 # Documentación en español
-├── MANUAL.md                 # Comprehensive English technical manual
-├── ROADMAP_UNIVERSAL_SCRAPER.md # Hoja de ruta para convertir la suite en herramienta 100% universal
-└── data/                     # Datos locales (ignorado en Git para ligereza)
-    ├── manifests/            # articles_manifest.json, standalone_manifest.json, assets_manifest.json
-    ├── raw_html/             # index.html, asesino/*.html, material/*.html, paginas/*.html
-    ├── assets/               # wp-content/ (style.css, uploads, gallery)
-    └── content/              # articles/*.md, database.json
+├── config.py                 # Configuración dinámica y motor de rescate en cascada (3 niveles)
+├── 01_crawler.py             # Paso 1: Crawler BFS recursivo y detector de sitemaps/robots
+├── 02_discover_assets.py     # Paso 2: Auditoría de CSS, JS, fuentes e imágenes
+├── 03_download_html.py       # Paso 3: Descargador masivo de HTMLs con mapeo de rutas
+├── 04_download_assets.py     # Paso 4: Descargador de multimedia y análisis recursivo de CSS
+├── 05_parse_articles.py      # Paso 5: Extractor heurístico (Trafilatura) a Markdown y JSON
+├── preview_server.py         # Servidor local proxy con rescate al vuelo y panel /status
+├── run_pipeline.py           # CLI y orquestador universal multiproyecto
+├── requirements.txt          # Dependencias Python
+├── README.md                 # Documentación general en español
+├── MANUAL.md                 # Technical Architecture & Developer Manual (English)
+├── ROADMAP_UNIVERSAL_SCRAPER.md # Especificación del diseño de universalización
+└── data/                     # Almacenamiento local aislado (ignorado en Git)
+    └── <dominio_slug>/       # Directorio dedicado para cada web archivada
+        ├── manifests/        # pages_manifest.json, assets_manifest.json, missing_*.json
+        ├── raw_html/         # Réplica exacta del árbol de directorios HTML
+        ├── assets/           # CSS, JS, imágenes, fuentes locales
+        └── content/          # Artículos en .md con Frontmatter YAML y database.json
 ```
 
 ---
 
-## 📖 Documentación Avanzada
+## 📄 Formato de Salida en Markdown
 
-* **Manual Técnico (Inglés):** Consulta [MANUAL.md](MANUAL.md) para especificaciones de arquitectura, fallbacks y formatos de datos.
-* **Hoja de Ruta Universal:** Consulta [ROADMAP_UNIVERSAL_SCRAPER.md](ROADMAP_UNIVERSAL_SCRAPER.md) para los pasos técnicos para utilizar este scraper con **cualquier otro sitio web**.
+Cada documento extraído en `data/<dominio>/content/<ruta>.md` incluye Frontmatter YAML compatible con Next.js, Nuxt, Astro y Hugo:
+
+```yaml
+---
+title: "Título del Artículo Extraído"
+slug: "nombre-del-slug"
+date: "2021-04-15"
+author: "Redacción"
+featured_image: "/assets/uploads/imagen-destacada.jpg"
+url: "https://ejemplo.com/noticias/nombre-del-slug"
+---
+
+# Título del Artículo Extraído
+
+Cuerpo del artículo extraído en Markdown limpio con imágenes reescritas...
+```
+
+Además, `data/<dominio>/content/database.json` proporciona el índice unificado de todas las entradas procesadas para búsqueda instantánea o importación a base de datos relacional.
+
+---
+
+## 🏆 Caso de Estudio: Criminalia.es
+
+Esta suite rescató con éxito el 100% de los contenidos de **Criminalia.es**:
+- **850 biografías criminales completas**
+- **620 galerías de fotos de expedientes** (100% de las capturas históricas existentes)
+- **227 páginas institucionales y feeds de noticias**
+- **3.726 assets multimedia**
+- El dataset completo preservado se encuentra publicado en el repositorio [0xKeltic/criminalia](https://github.com/0xKeltic/criminalia).
+
+---
+
+## 📖 Documentación Adicional
+
+* Consulta [MANUAL.md](MANUAL.md) para detalles en profundidad sobre el protocolo HTTP, heurísticas del crawler y configuración avanzada.
+

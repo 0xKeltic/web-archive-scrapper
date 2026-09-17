@@ -1,142 +1,127 @@
+# -*- coding: utf-8 -*-
 import json
 import re
-import time
-import requests
+from pathlib import Path
+from urllib.parse import urlparse, urljoin
 from bs4 import BeautifulSoup
 from loguru import logger
 import config
 
-def extract_assets_from_html(html_text: str, base_url: str = 'https://criminalia.es'):
-    assets = set()
-    soup = BeautifulSoup(html_text, 'html.parser')
+STATIC_EXTENSIONS = (
+    '.css', '.js', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.ico',
+    '.woff', '.woff2', '.ttf', '.eot', '.otf', '.mp3', '.mp4', '.pdf'
+)
+
+def discover_assets_from_cdx(domain: str) -> dict:
+    """Queries Wayback CDX API for all archived static assets under the target domain."""
+    logger.info(f'Consultando API CDX de Wayback para catalogar assets estaticos de {domain}...')
+    assets = {
+        'css': set(),
+        'js': set(),
+        'images': set(),
+        'fonts': set(),
+        'other': set()
+    }
     
-    # CSS
-    for link in soup.find_all('link', rel=lambda r: r and ('stylesheet' in r or 'icon' in r)):
-        href = link.get('href')
-        if href:
-            assets.add(href)
-            
-    # JS
-    for script in soup.find_all('script', src=True):
-        src = script.get('src')
-        if src:
-            assets.add(src)
-            
-    # Images
-    for img in soup.find_all('img'):
-        for attr in ('src', 'data-src', 'data-lazy-src'):
-            val = img.get(attr)
-            if val and not val.startswith('data:'):
-                assets.add(val)
+    try:
+        # Query CDX for original URLs under the domain
+        query_url = f'{config.CDX_API_URL}?url={domain}/*&fl=original,mimetype&collapse=urlkey&output=json'
+        resp = config.SESSION.get(query_url, timeout=25)
+        if resp.status_code == 200:
+            data = resp.json()
+            # First row is header
+            for row in data[1:]:
+                if len(row) < 1:
+                    continue
+                orig_url = row[0].split('?')[0].strip()
+                parsed = urlparse(orig_url)
+                ext = '.' + parsed.path.rsplit('.', 1)[-1].lower() if '.' in parsed.path else ''
                 
-    # Normalize
-    cleaned = set()
-    for a in assets:
-        a = a.split('?')[0].strip()
-        if a.startswith('//'):
-            a = 'https:' + a
-        elif a.startswith('/'):
-            a = f'{base_url}{a}'
-        if 'criminalia.es' in a:
-            cleaned.add(a)
-    return cleaned
-
-def query_cdx_for_assets():
-    endpoints = [
-        'criminalia.es/wp-content/themes/*',
-        'criminalia.es/wp-content/plugins/*',
-        'criminalia.es/wp-content/uploads/*'
-    ]
-    cdx_assets = set()
-    
-    logger.info('Consultando API CDX de Web Archive para capturar todos los archivos estaticos...')
-    for path_pattern in endpoints:
-        cdx_url = f'https://web.archive.org/cdx/search/cdx?url={path_pattern}&output=json&fl=original,mimetype&filter=statuscode:200&collapse=urlkey&limit=10000'
-        logger.info(f'Consultando CDX para: {path_pattern}...')
-        try:
-            resp = config.SESSION.get(cdx_url, timeout=30)
-            if resp.status_code == 200:
-                data = resp.json()
-                if len(data) > 1:
-                    headers = data[0]
-                    rows = data[1:]
-                    logger.success(f'  Encontrados {len(rows)} archivos en {path_pattern}')
-                    for r in rows:
-                        orig = r[0].split('?')[0]
-                        cdx_assets.add(orig)
-            else:
-                logger.warning(f'CDX devolvio status {resp.status_code} para {path_pattern}')
-        except Exception as e:
-            logger.warning(f'No se pudo consultar CDX para {path_pattern} ({e}). Se continuara con assets del HTML.')
-        time.sleep(2)
+                if ext == '.css':
+                    assets['css'].add(orig_url)
+                elif ext == '.js':
+                    assets['js'].add(orig_url)
+                elif ext in ('.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.ico'):
+                    assets['images'].add(orig_url)
+                elif ext in ('.woff', '.woff2', '.ttf', '.eot', '.otf'):
+                    assets['fonts'].add(orig_url)
+                elif ext in STATIC_EXTENSIONS:
+                    assets['other'].add(orig_url)
+                    
+            total_cdx = sum(len(v) for v in assets.values())
+            logger.info(f'API CDX devolvio {total_cdx} assets estaticos unicos.')
+    except Exception as e:
+        logger.warning(f'No se pudo consultar CDX para assets ({e}). Se continuara con el escaneo de HTML.')
         
-    return cdx_assets
+    return assets
 
-def main():
-    discovered_assets = set()
-    
-    # 1. Scrape assets from homepage
-    logger.info('Extrayendo assets de la portada...')
-    home_url = config.get_wayback_raw_url('https://criminalia.es/')
-    home_html = config.fetch_with_retry(home_url)
-    if home_html:
-        home_assets = extract_assets_from_html(home_html)
-        logger.info(f'Assets encontrados en portada: {len(home_assets)}')
-        discovered_assets.update(home_assets)
+def scan_html_for_assets(domain: str, assets: dict) -> dict:
+    """Scans all locally downloaded or cataloged HTMLs for referenced static assets."""
+    raw_dir = config.RAW_HTML_DIR
+    if not raw_dir.exists():
+        return assets
         
-    # 2. Scrape assets from available cached index pages
-    for cached_file in (config.RAW_HTML_DIR / 'indices').glob('*.html'):
+    html_files = list(raw_dir.rglob('*.html'))
+    if not html_files:
+        return assets
+
+    logger.info(f'Escaneando {len(html_files)} archivos HTML locales para extraer recursos...')
+    
+    for html_file in html_files:
         try:
-            with open(cached_file, 'r', encoding='utf-8', errors='ignore') as f:
-                idx_assets = extract_assets_from_html(f.read())
-                discovered_assets.update(idx_assets)
+            with open(html_file, 'r', encoding='utf-8', errors='ignore') as f:
+                soup = BeautifulSoup(f.read(), 'html.parser')
+                
+                # 1. Stylesheets
+                for link in soup.find_all('link', rel=lambda r: r and 'stylesheet' in r):
+                    href = link.get('href')
+                    if href:
+                        clean = config.clean_target_url(href)
+                        assets['css'].add(clean)
+                        
+                # 2. Scripts
+                for script in soup.find_all('script', src=True):
+                    src = script.get('src')
+                    if src:
+                        clean = config.clean_target_url(src)
+                        assets['js'].add(clean)
+                        
+                # 3. Images
+                for img in soup.find_all('img'):
+                    for attr in ('src', 'data-src', 'data-lazy-src'):
+                        src = img.get(attr)
+                        if src and not src.startswith('data:'):
+                            clean = config.clean_target_url(src)
+                            assets['images'].add(clean)
+                            
+                # 4. Favicons
+                for icon in soup.find_all('link', rel=lambda r: r and ('icon' in r or 'shortcut' in r)):
+                    href = icon.get('href')
+                    if href:
+                        clean = config.clean_target_url(href)
+                        assets['images'].add(clean)
         except Exception:
             pass
             
-    # 3. Query CDX for all uploads, themes, plugins
-    cdx_assets = query_cdx_for_assets()
-    discovered_assets.update(cdx_assets)
+    return assets
+
+def main():
+    domain = config.CURRENT_DOMAIN
+    assets = discover_assets_from_cdx(domain)
+    assets = scan_html_for_assets(domain, assets)
     
-    # Classify assets
-    classified = {
-        'css': [],
-        'js': [],
-        'images': [],
-        'fonts': [],
-        'other': []
+    manifest_file = config.MANIFESTS_DIR / 'assets_manifest.json'
+    export_data = {
+        'domain': domain,
+        'timestamp': config.CURRENT_TIMESTAMP,
+        'total_assets': sum(len(v) for v in assets.values()),
+        'assets': {k: sorted(list(v)) for k, v in assets.items()}
     }
     
-    for asset in sorted(discovered_assets):
-        lower = asset.lower()
-        if lower.endswith('.css'):
-            classified['css'].append(asset)
-        elif lower.endswith('.js'):
-            classified['js'].append(asset)
-        elif any(lower.endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.ico', '.svg']):
-            classified['images'].append(asset)
-        elif any(lower.endswith(ext) for ext in ['.woff', '.woff2', '.ttf', '.eot']):
-            classified['fonts'].append(asset)
-        else:
-            classified['other'].append(asset)
-            
-    manifest = {
-        'total_assets': len(discovered_assets),
-        'counts': {k: len(v) for k, v in classified.items()},
-        'assets': classified
-    }
-    
-    out_file = config.MANIFESTS_DIR / 'assets_manifest.json'
-    with open(out_file, 'w', encoding='utf-8') as f:
-        json.dump(manifest, f, ensure_ascii=False, indent=2)
+    with open(manifest_file, 'w', encoding='utf-8') as f:
+        json.dump(export_data, f, indent=2, ensure_ascii=False)
         
-    logger.success('=== MANIFIESTO DE ASSETS GENERADO ===')
-    logger.info(f'Total assets: {manifest["total_assets"]}')
-    logger.info(f'CSS: {manifest["counts"]["css"]}')
-    logger.info(f'JS: {manifest["counts"]["js"]}')
-    logger.info(f'Imagenes: {manifest["counts"]["images"]}')
-    logger.info(f'Fuentes: {manifest["counts"]["fonts"]}')
-    logger.info(f'Otros: {manifest["counts"]["other"]}')
-    logger.info(f'Guardado en: {out_file}')
+    logger.success(f'Inventario de assets completado: {export_data["total_assets"]} recursos guardados en {manifest_file}')
 
 if __name__ == '__main__':
     main()

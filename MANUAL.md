@@ -1,216 +1,234 @@
-# Criminalia.es Preservation Suite - Technical Architecture & Developer Manual
+# Universal Web Archive Preservation Suite - Technical Architecture & Developer Manual
 
-A comprehensive guide to the extraction, multi-tier historical recovery, local replication, and structured export pipeline for the true-crime encyclopedia **Criminalia.es**.
+A comprehensive engineering reference for the extraction, multi-tier historical recovery, local replication, and structured export pipeline for fallen or offline websites archived on **The Internet Archive (Wayback Machine)** and secondary preservation networks like **archive.today (archive.ph)**.
 
 ---
 
 ## 1. System Overview
 
-**Criminalia.es** was a major Spanish-language true-crime encyclopedia founded and authored by criminologist Juan Ignacio Blanco. Following his passing, the site went offline. This preservation suite was engineered to systematically recover 100% of the encyclopedia—including articles, photo galleries, case files, stylesheets, scripts, and media—from **The Internet Archive (Wayback Machine)** and secondary digital preservation networks like **archive.today (archive.ph)**.
+Websites frequently disappear due to domain expirations, censorship, lack of maintenance, or author demise (as with the flagship case study **Criminalia.es**, authored by the late criminologist Juan Ignacio Blanco). This preservation suite was engineered to systematically recover 100% of any targeted website—including full article hierarchies, photo galleries, case files, stylesheets, scripts, and media assets—transforming raw archive snapshots into clean, structured Markdown ready for modern Jamstack deployment (Next.js, Astro, Nuxt, Hugo).
 
-### Core Objectives:
-1. **Zero-Loss Crawling:** Discover every single archived entry without blind crawling.
-2. **Multi-Tier Fallback Engine:** Mitigate false 404s caused by point-in-time snapshot gaps.
-3. **Local High-Fidelity Replication:** Re-serve the original site locally with all assets and stylesheets intact.
-4. **Structured Knowledge Export:** Transform archaic WordPress markup into clean Markdown (`.md`) with YAML frontmatter and unified JSON schemas for modern Jamstack deployment (Next.js / Astro).
+### Core Capabilities:
+1. **Universal & CMS-Agnostic:** Operates without requiring prior knowledge of the site's underlying engine (WordPress, Drupal, Joomla, Ghost, custom PHP, or static HTML).
+2. **Autonomous URL Discovery:** Combines archived XML Sitemaps / `robots.txt` parsing with an adaptive Breadth-First Search (BFS) graph crawler.
+3. **Multi-Tier Cascading Fallback:** Mitigates temporal gaps and false 404 errors across multiple archive repositories.
+4. **Isolated Multi-Domain Workspaces:** Preserves multiple sites concurrently under isolated directories (`data/<domain_slug>/...`).
+5. **Intelligent Heuristic Content Extraction:** Employs readability algorithms (`trafilatura` + `markdownify`) to extract clean body text, titles, authors, and dates without hardcoded CSS selectors.
+6. **Local High-Fidelity Replica Server:** Re-serves any archived site locally with dynamic URL rewriting and on-the-fly missing asset rescue.
 
 ---
 
 ## 2. Multi-Tier Cascading Fallback Architecture
 
-Web archives do not take atomic snapshots of an entire domain simultaneously; individual pages and assets are crawled across different dates and years. Querying an archive with a single fixed timestamp often returns `404 Not Found` for files captured on earlier or later dates.
+Web archives do not capture atomic snapshots of an entire domain simultaneously; individual pages and assets are crawled across different dates and years. Querying an archive with a single fixed timestamp often returns `404 Not Found` for resources captured on earlier or later dates.
 
-To solve this, our suite implements a **3-Tier Cascading Fallback**:
+To achieve maximum completeness, the suite implements an automated **3-Tier Cascading Fallback**:
 
 ```
-[Target Resource Request]
-          │
-          ▼
-┌────────────────────────────────────────┐
-│  Tier 1: Primary Snapshot (2023-07-11) │
-└────────────────────────────────────────┘
-          │ (if 404 Not Found)
-          ▼
-┌────────────────────────────────────────┐
-│  Tier 2: Historical Wildcard (2id_)    │
-│  - Traverses 2015–2022 captures        │
-│  - Resolves HTTP / HTTPS protocol skew │
-└────────────────────────────────────────┘
-          │ (if 404 Not Found)
-          ▼
-┌────────────────────────────────────────┐
-│  Tier 3: archive.today Network         │
-│  - archive.is / archive.ph / archive.today
-│  - Bypasses anti-bot rate limits       │
-└────────────────────────────────────────┘
-          │ (if 404 Not Found)
-          ▼
-┌────────────────────────────────────────┐
-│  Terminal 404 Logged to Audit Trail    │
-└────────────────────────────────────────┘
+[Target Resource Request: https://example.com/page]
+                     │
+                     ▼
+┌────────────────────────────────────────────────────────┐
+│  Tier 1: Dynamic Snapshot Timestamp (or CDX latest)    │
+│  - Endpoint: web.archive.org/web/<TIMESTAMP>id_/<URL>  │
+└────────────────────────────────────────────────────────┘
+                     │ (if 404 Not Found)
+                     ▼
+┌────────────────────────────────────────────────────────┐
+│  Tier 2: Historical Wildcard (2id_)                    │
+│  - Endpoint: web.archive.org/web/2id_/<URL>            │
+│  - Traverses entire historical timeline across years   │
+│  - Protocol Swapping: evaluates both http:// & https://│
+└────────────────────────────────────────────────────────┘
+                     │ (if 404 Not Found)
+                     ▼
+┌────────────────────────────────────────────────────────┐
+│  Tier 3: archive.today Preservation Network            │
+│  - Queries archive.is / archive.today / archive.ph     │
+│  - Authenticated browser headers to bypass rate limits │
+└────────────────────────────────────────────────────────┘
+                     │ (if 404 Not Found)
+                     ▼
+┌────────────────────────────────────────────────────────┐
+│  Terminal 404 Logged to Audit Trail (missing_*.json)   │
+└────────────────────────────────────────────────────────┘
 ```
 
-### Protocol Details:
-- **Tier 1 (Wayback 2023):** `https://web.archive.org/web/20230711124744id_/<URL>`. Provides the most recent state before the site went dark.
-- **Tier 2 (Wayback 2id_):** `https://web.archive.org/web/2id_/<URL>`. The `2id_` wildcard requests the raw un-wrapped content from the nearest historical capture in the 2000s–2020s. Both `http://` and `https://` schemas are evaluated to catch pre-SSL archives.
-- **Tier 3 (archive.today):** Evaluates `archive.is`, `archive.today`, and `archive.ph` search endpoints using authentic browser headers to avoid Cloudflare challenges.
+### Protocol Mechanics:
+- **Tier 1 (Wayback Timestamp RAW):** Queries `https://web.archive.org/web/{timestamp}id_/{url}`. The `id_` modifier requests the un-wrapped, raw payload without Wayback's injected JavaScript toolbar or analytics scripts.
+- **Tier 2 (Wayback 2id_ Wildcard & Protocol Swap):** Queries `https://web.archive.org/web/2id_/{url}`. The `2id_` directive instructs Wayback's CDX cluster to locate the chronologically closest available 200 OK snapshot in its multi-decade index. If the target URL is HTTPS, an immediate fallback request evaluates the HTTP counterpart (critical for sites archived prior to Let's Encrypt / HTTPS adoption).
+- **Tier 3 (archive.today Network):** Scans the search index across `archive.is`, `archive.today`, and `archive.ph` mirrors to locate mirror captures taken when Wayback was offline or blocked by `robots.txt`.
 
 ---
 
 ## 3. Pipeline Modules & Execution Flow
 
-The suite is broken down into modular, decoupled, idempotent scripts orchestrated by `run_pipeline.py`:
+The suite is decomposed into modular, idempotent steps orchestrated by `run_pipeline.py`:
 
 ```
-┌──────────────────────────┐
-│  01_discover_sitemap.py  │ ──► Generates articles_manifest.json (856 items)
-└──────────────────────────┘
-             │
-             ▼
-┌──────────────────────────┐
-│  02_discover_assets.py   │ ──► Generates assets_manifest.json (CSS, JS, Fonts)
-└──────────────────────────┘
-             │
-             ▼
-┌──────────────────────────┐
-│  03_download_html.py     │ ──► Downloads 856 main articles + ~800 photo galleries
-└──────────────────────────┘
-             │
-             ▼
-┌──────────────────────────┐
-│ 03b_download_standalone  │ ──► Downloads 230+ institutional, country feeds & news posts
-└──────────────────────────┘
-             │
-             ▼
-┌──────────────────────────┐
-│  04_download_assets.py   │ ──► Downloads 9,800+ crime photographs and assets
-└──────────────────────────┘
-             │
-             ▼
-┌──────────────────────────┐
-│  05_parse_articles.py    │ ──► Generates Markdown (.md) files & database.json
-└──────────────────────────┘
+┌──────────────────────────────────────┐
+│  01_crawler.py                       │ ──► Generates pages_manifest.json & stores HTMLs
+│  (Sitemaps check + BFS Graph Crawl)  │
+└──────────────────────────────────────┘
+                   │
+                   ▼
+┌──────────────────────────────────────┐
+│  02_discover_assets.py               │ ──► Generates assets_manifest.json (CSS/JS/Img/Font)
+│  (CDX API query + HTML DOM Scanner)  │
+└──────────────────────────────────────┘
+                   │
+                   ▼
+┌──────────────────────────────────────┐
+│  03_download_html.py                 │ ──► Downloads any remaining pages in raw_html/
+└──────────────────────────────────────┘
+                   │
+                   ▼
+┌──────────────────────────────────────┐
+│  04_download_assets.py               │ ──► Downloads static assets & parses CSS @import/fonts
+└──────────────────────────────────────┘
+                   │
+                   ▼
+┌──────────────────────────────────────┐
+│  05_parse_articles.py                │ ──► Extracts clean Markdown (.md) & database.json
+│  (Trafilatura + Markdownify)         │
+└──────────────────────────────────────┘
 ```
 
-### Module Breakdown:
+### Module Specifications:
 
-#### `01_discover_sitemap.py`
-- Crawls the 78 master index query URLs (`?l=[a-z]&g=[hombre|mujer|crimen]`).
-- Extracts all `/asesino/<slug>/` links and categorizes them by gender and letter.
-- Scrapes the `/actualidad/` chronological archives.
-- Produces `data/manifests/articles_manifest.json`.
+#### `config.py` (Central Configuration & Cascading Engine)
+- Dynamically initializes workspace settings via `init_project(target_url, custom_timestamp, depth)`.
+- If no timestamp is provided, queries the Wayback CDX API (`fastLatest=true`) to discover the most recent active snapshot automatically.
+- Sanitizes domain strings into safe filesystem slugs and instantiates directory trees under `data/<domain_slug>/`.
+- Provides the thread-safe `fetch_with_retry` method implementing exponential backoff on HTTP 429/503 responses.
 
-#### `02_discover_assets.py`
-- Parses template assets from key layouts (homepage, article, index).
-- Discovers stylesheets (`style.css`, plugin CSS), scripts (`cycle2`, `fancybox`), and theme images.
-- Produces `data/manifests/assets_manifest.json`.
+#### `01_crawler.py` (Universal Crawler & Sitemap Discoverer)
+- **Phase A (Sitemaps & Robots):** Probes for `/sitemap.xml`, `/sitemap_index.xml`, `/robots.txt`, and common sitemap routes. Extracts all canonical internal URLs.
+- **Phase B (BFS Graph Crawler):** Starting from the root URL `/`, executes a breadth-first search queue up to `--depth`. Normalizes relative URLs, discards binary attachments, anchors (`#`), and external links.
+- Stores discovered HTML directly into `raw_html/` on the fly, eliminating redundant network calls in subsequent steps.
+- Exports `pages_manifest.json`.
 
-#### `03_download_html.py`
-- Sequentially fetches raw HTML pages using the cascading fetcher.
-- Automatically scans each downloaded article for related photo gallery links (`/material/<slug>-fotos/`) and queues them for download.
-- Idempotent: Skips files already stored locally with non-zero size.
+#### `02_discover_assets.py` (Resource Inventory)
+- Queries Wayback CDX API with wildcard filtering for the domain (`url={domain}/*`) to retrieve historical inventories of CSS, JS, fonts, and images.
+- Scans all local HTML files using BeautifulSoup to detect referenced stylesheets, deferred scripts (`data-src`), favicons, and `@font-face` fonts.
+- Exports `assets_manifest.json`.
 
-#### `03b_download_standalone.py`
-- Discovers all standalone pages across the site (institutional pages like `/contacto/`, `/colabora/`, `/ultimas-entradas/`, `/politica-de-cookies/`, regional country hubs `/actualidad/<pais>/`, date archives, and standalone crime news posts).
-- Saves catalog to `data/manifests/standalone_manifest.json`.
-- Downloads all pages into `data/raw_html/paginas/<slug>.html`.
+#### `03_download_html.py` (Bulk HTML Downloader)
+- Reads `pages_manifest.json` and ensures 100% of discovered pages exist locally.
+- Automatically skips files that already exist on disk with non-zero size (idempotent resume).
+- Persists non-recoverable URLs into `missing_pages.json`.
 
-#### `04_download_assets.py`
-- Scans all downloaded HTML files for image tags (`<img>`, `data-src`, `data-lazy-src`).
-- Downloads thousands of crime scene photos, mugshots, newspaper clippings, and evidence documents into `data/assets/wp-content/`.
-- Traverses CSS files to discover background textures and font files (`@font-face`, `url(...)`).
+#### `04_download_assets.py` (Media & Static Downloader)
+- Reconstructs original server path hierarchies under `data/<domain_slug>/assets/`.
+- Traverses downloaded `.css` files with regular expressions (`url(...)`) to discover nested web fonts (`.woff2`, `.ttf`) and background textures.
+- Maintains `missing_assets.json` to avoid redundant HTTP requests during repeated executions.
 
-#### `05_parse_articles.py`
-- Strips legacy WordPress noise, tracking pixels, ads, and inline styling.
-- Converts DOM trees into clean Markdown (`#`, `##`, `>`, lists, bold, italics).
-- Rewrites image paths to point to local relative assets (`/assets/wp-content/...`).
-- Generates YAML Frontmatter with metadata and exports individual `.md` files to `data/content/articles/` and the master index to `data/content/database.json`.
+#### `05_parse_articles.py` (Heuristic Content Extractor)
+- Uses **Trafilatura**'s statistical text density algorithms to isolate primary article content from navigational menus, sidebars, cookie notices, and advertisements.
+- Falls back to `markdownify` with HTML semantic containers (`<article>`, `<main>`) if heuristic density is low.
+- Rewrites all internal image links to local paths (`/assets/<relative_path>`).
+- Generates clean YAML Frontmatter and unifies the site catalog into `database.json`.
 
 ---
 
 ## 4. Local High-Fidelity Replica Server (`preview_server.py`)
 
-To verify the scraped archive and browse the historical content without needing a live internet connection, a lightweight multi-threaded HTTP server is provided.
+A standalone, non-blocking proxy server enabling full local inspection of any preserved website.
 
-### Capabilities:
-- **Port 8080:** Accessible at `http://localhost:8080/`.
-- **Exact Visual Reproduction:** Serves the original homepage (`index.html`), slider, typography, and red header.
-- **Dynamic Asset & Link Rewriting:** Intercepts legacy `https://criminalia.es/...` and `wp-criminalia/...` URLs, converting them into relative local paths.
-- **Universal Catch-All Routing:** Any link clicked anywhere on the site (`/contacto/`, `/colabora/`, `/ultimas-entradas/`, crime news, country feeds) is dynamically resolved, downloaded on the fly if missing, and cached on disk.
-- **Interactive Live Status Dashboard (`/status` & `/progreso`):**
-  - Interactive JavaScript client-side countdown timer (2s → 1s → Refreshing...).
-  - Real-time progress bars for:
-    - Main biographical articles count (out of 850).
-    - Photo gallery count (out of 798).
-    - Institutional & standalone pages stored in disk.
-    - Actualidad articles.
-    - Downloaded media assets on disk.
-    - Exported Markdown articles.
+### Key Features:
+- **Universal Multi-Site Support:** Run `python preview_server.py --domain ejemplo.com` to mount any workspace in `data/`.
+- **Dynamic Link Rewriting:** Strips absolute legacy domain URLs (e.g. `https://ejemplo.com/path` or `//ejemplo.com/path`) into relative local paths (`/path`).
+- **On-the-Fly Rescue Engine:** If a user clicks an internal link or requests an asset that was not previously downloaded, the server catches the request, fetches it via the 3-tier cascade in ~1 second, caches it on disk, and renders it seamlessly.
+- **Real-Time Monitor Dashboard (`/status`):**
+  - Live animated countdown timer (2s).
+  - Accurate counts of HTML pages, media assets, and generated Markdown files.
 
 ---
 
-## 5. Data Specifications
+## 5. Data Formats & Schemas
 
-### YAML Frontmatter Schema:
-Every Markdown file generated in `data/content/articles/<slug>.md` conforms to this format:
-
-```yaml
----
-title: "Theodore Robert Bundy"
-slug: "ted-bundy"
-category: "hombre"
-featured_image: "/assets/wp-content/uploads/2015/04/Ted-Bundy.jpg"
-galleries: ["ted-bundy-fotos", "ted-bundy-fotos-1"]
-url: "https://criminalia.es/asesino/ted-bundy/"
----
-
-# Theodore Robert Bundy
-
-... [Clean Markdown body text] ...
+### Directory Hierarchy:
+```
+data/<domain_slug>/
+├── manifests/
+│   ├── pages_manifest.json
+│   ├── assets_manifest.json
+│   ├── missing_pages.json
+│   └── missing_assets.json
+├── raw_html/
+│   ├── index.html
+│   ├── blog/
+│   │   └── entry-1.html
+│   └── contact.html
+├── assets/
+│   ├── css/
+│   ├── js/
+│   └── images/
+└── content/
+    ├── index.md
+    ├── blog/
+    │   └── entry-1.md
+    └── database.json
 ```
 
-### `database.json` Schema:
-The global database file `data/content/database.json` exports an array of article objects suitable for instant client-side search (e.g. Pagefind, MiniSearch, Algolia) or database seeding (PostgreSQL, SQLite):
+### YAML Frontmatter Schema:
+```yaml
+---
+title: "Article Title"
+slug: "article-slug"
+date: "2022-03-10"
+author: "Author Name"
+featured_image: "/assets/images/header.jpg"
+url: "https://example.com/blog/article-slug"
+---
 
+# Article Title
+
+Markdown body content with local image links:
+![Figure 1](/assets/images/diagram.png)
+```
+
+### Global Catalog Schema (`database.json`):
 ```json
 [
   {
-    "title": "Theodore Robert Bundy",
-    "slug": "ted-bundy",
-    "category": "hombre",
-    "featured_image": "/assets/wp-content/uploads/2015/04/Ted-Bundy.jpg",
-    "galleries": ["ted-bundy-fotos", "ted-bundy-fotos-1"],
-    "url": "https://criminalia.es/asesino/ted-bundy/",
-    "excerpt": "Ted Bundy fue uno de los asesinos en serie más notorios de la historia de los Estados Unidos..."
+    "title": "Article Title",
+    "slug": "article-slug",
+    "date": "2022-03-10",
+    "author": "Author Name",
+    "featured_image": "/assets/images/header.jpg",
+    "relative_path": "blog/article-slug.md",
+    "excerpt": "Opening snippet of article content for card previews..."
   }
 ]
 ```
 
 ---
 
-## 6. Command-Line Reference
+## 6. CLI Reference (`run_pipeline.py`)
 
 ```bash
-# Full automated pipeline execution
-python run_pipeline.py --all
+# Archive any website end-to-end:
+python run_pipeline.py --url https://example.com --all
 
-# Granular step execution
-python run_pipeline.py --step 1   # Discover site structure and index pages
-python run_pipeline.py --step 2   # Audit and map static assets
-python run_pipeline.py --step 3   # Download HTML articles and galleries
-python run_pipeline.py --step 4   # Download photos, media, and fonts
-python run_pipeline.py --step 5   # Export Markdown files and database.json
+# Archive with explicit historical snapshot timestamp:
+python run_pipeline.py --url https://example.com --date 20210615 --all
 
-# Start the preview server
-python preview_server.py
+# Customize BFS crawl recursion depth and limits:
+python run_pipeline.py --url https://example.com --depth 4 --max-pages 10000 --all
+
+# Run individual steps:
+python run_pipeline.py --url https://example.com --step 1   # BFS Crawler
+python run_pipeline.py --url https://example.com --step 2   # Asset Inventory
+python run_pipeline.py --url https://example.com --step 3   # Download HTMLs
+python run_pipeline.py --url https://example.com --step 4   # Download Assets
+python run_pipeline.py --url https://example.com --step 5   # Parse to Markdown
+
+# Inspect archived projects:
+python run_pipeline.py --list
+python run_pipeline.py --status
+
+# Launch preview server:
+python run_pipeline.py --url https://example.com --serve --port 8080
 ```
 
----
-
-## 7. Rate Limiting & Etiquette
-
-When crawling digital libraries like The Internet Archive:
-- Keep concurrency between 1 and 3 worker threads.
-- Implement exponential backoff upon encountering HTTP 429 or 503 status codes.
-- Do not repeat requests for assets that are already verified on disk.
-- Use explicit User-Agent identification.

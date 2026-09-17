@@ -1,101 +1,79 @@
+# -*- coding: utf-8 -*-
 import json
 import time
-from bs4 import BeautifulSoup
+from pathlib import Path
 from loguru import logger
 import config
 
-def download_articles():
-    manifest_path = config.MANIFESTS_DIR / 'articles_manifest.json'
-    if not manifest_path.exists():
-        logger.error('No se encontro articles_manifest.json. Ejecuta primero 01_discover_sitemap.py')
+def download_all_pages():
+    manifest_file = config.MANIFESTS_DIR / 'pages_manifest.json'
+    if not manifest_file.exists():
+        logger.error(f'No se encontro {manifest_file}. Ejecuta primero el paso 1 (01_crawler.py)')
         return
 
-    with open(manifest_path, 'r', encoding='utf-8') as f:
-        manifest = json.load(f)
+    with open(manifest_file, 'r', encoding='utf-8') as f:
+        data = json.load(f)
 
-    articles = manifest.get('articles', [])
-    actualidad = manifest.get('actualidad', [])
-    
-    total = len(articles) + len(actualidad)
-    logger.info(f'Iniciando descarga de {total} paginas HTML...')
+    pages = data.get('pages', [])
+    total = len(pages)
+    logger.info(f'Iniciando descarga de {total} paginas HTML para {config.CURRENT_DOMAIN}...')
+
+    missing_file = config.MANIFESTS_DIR / 'missing_pages.json'
+    missing_pages = set()
+    if missing_file.exists():
+        try:
+            with open(missing_file, 'r', encoding='utf-8') as f:
+                missing_pages = set(json.load(f))
+        except Exception:
+            pass
 
     success = 0
     skipped = 0
     failed = 0
-    
-    galleries_found = set()
 
-    for idx, art in enumerate(articles, 1):
-        slug = art.get('slug')
-        url = art.get('url')
-        name = art.get('name', slug)
-        target_file = config.RAW_HTML_DIR / 'asesino' / f'{slug}.html'
+    for idx, item in enumerate(pages, 1):
+        url = item.get('url')
+        rel_path = item.get('relative_path') or config.url_to_relative_path(url)
+        target_file = config.RAW_HTML_DIR / rel_path
 
-        if target_file.exists() and target_file.stat().st_size > 1000:
+        if target_file.exists() and target_file.stat().st_size > 200:
             skipped += 1
-            try:
-                with open(target_file, 'r', encoding='utf-8', errors='ignore') as f:
-                    soup = BeautifulSoup(f.read(), 'html.parser')
-                    for a in soup.find_all('a', href=lambda h: h and '/material/' in h):
-                        galleries_found.add(a['href'])
-            except Exception:
-                pass
             continue
 
-        wayback_url = config.get_wayback_raw_url(url)
-        logger.info(f'[{idx}/{total}] Descargando articulo: {name} ({slug})...')
+        if url in missing_pages:
+            skipped += 1
+            continue
+
+        logger.info(f'[{idx}/{total}] Descargando pagina: {rel_path}...')
+        html = config.fetch_with_retry(url)
         
-        html = config.fetch_with_retry(wayback_url)
-        if html and len(html) > 500:
-            with open(target_file, 'w', encoding='utf-8') as f:
+        if html and len(html) > 200:
+            target_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(target_file, 'w', encoding='utf-8', errors='ignore') as f:
                 f.write(html)
             success += 1
-            
-            # Scan for /material/ photo galleries
-            soup = BeautifulSoup(html, 'html.parser')
-            for a in soup.find_all('a', href=lambda h: h and '/material/' in h):
-                galleries_found.add(a['href'])
         else:
             failed += 1
-            logger.warning(f'Fallo al descargar {slug}')
+            missing_pages.add(url)
+            if failed % 20 == 0:
+                try:
+                    with open(missing_file, 'w', encoding='utf-8') as f:
+                        json.dump(sorted(list(missing_pages)), f, indent=2, ensure_ascii=False)
+                except Exception:
+                    pass
 
-        time.sleep(0.35)
+        time.sleep(0.2)
 
-    # Download discovered galleries
-    logger.info(f'Descargando {len(galleries_found)} galerias de fotos encontradas...')
-    for gal_url in galleries_found:
-        gal_url_clean = gal_url.split('?')[0].rstrip('/') + '/'
-        slug = [p for p in gal_url_clean.split('/') if p][-1]
-        target_file = config.RAW_HTML_DIR / 'material' / f'{slug}.html'
-        
-        if target_file.exists() and target_file.stat().st_size > 1000:
-            continue
-            
-        wayback_url = config.get_wayback_raw_url(gal_url_clean)
-        html = config.fetch_with_retry(wayback_url)
-        if html and len(html) > 500:
-            with open(target_file, 'w', encoding='utf-8') as f:
-                f.write(html)
-        time.sleep(0.35)
+    try:
+        with open(missing_file, 'w', encoding='utf-8') as f:
+            json.dump(sorted(list(missing_pages)), f, indent=2, ensure_ascii=False)
+    except Exception:
+        pass
 
-    # Download actualidad
-    for idx, act in enumerate(actualidad, 1):
-        slug = act.get('slug')
-        url = act.get('url')
-        target_file = config.RAW_HTML_DIR / 'actualidad' / f'{slug}.html'
-        
-        if target_file.exists() and target_file.stat().st_size > 1000:
-            continue
-            
-        wayback_url = config.get_wayback_raw_url(url)
-        logger.info(f'[Actualidad {idx}/{len(actualidad)}] Descargando: {slug}...')
-        html = config.fetch_with_retry(wayback_url)
-        if html and len(html) > 500:
-            with open(target_file, 'w', encoding='utf-8') as f:
-                f.write(html)
-        time.sleep(0.35)
+    logger.success(f'Descarga de paginas finalizada: {success} nuevas, {skipped} ya existian, {failed} fallidas.')
 
-    logger.success(f'Descargas completadas: {success} nuevas, {skipped} ya existian, {failed} fallidas.')
+def main():
+    download_all_pages()
 
 if __name__ == '__main__':
-    download_articles()
+    main()
