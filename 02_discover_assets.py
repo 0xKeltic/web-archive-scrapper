@@ -69,6 +69,8 @@ def scan_html_for_assets(domain: str, assets: dict) -> dict:
     
     for html_file in html_files:
         try:
+            rel_to_raw = html_file.relative_to(raw_dir).as_posix()
+            base_page_url = f"https://{domain}/{rel_to_raw}"
             with open(html_file, 'r', encoding='utf-8', errors='ignore') as f:
                 soup = BeautifulSoup(f.read(), 'html.parser')
                 
@@ -76,14 +78,14 @@ def scan_html_for_assets(domain: str, assets: dict) -> dict:
                 for link in soup.find_all('link', rel=lambda r: r and 'stylesheet' in r):
                     href = link.get('href')
                     if href:
-                        clean = config.clean_target_url(href)
+                        clean = urljoin(base_page_url, href)
                         assets['css'].add(clean)
                         
                 # 2. Scripts
                 for script in soup.find_all('script', src=True):
                     src = script.get('src')
                     if src:
-                        clean = config.clean_target_url(src)
+                        clean = urljoin(base_page_url, src)
                         assets['js'].add(clean)
                         
                 # 3. Images
@@ -91,14 +93,14 @@ def scan_html_for_assets(domain: str, assets: dict) -> dict:
                     for attr in ('src', 'data-src', 'data-lazy-src'):
                         src = img.get(attr)
                         if src and not src.startswith('data:'):
-                            clean = config.clean_target_url(src)
+                            clean = urljoin(base_page_url, src)
                             assets['images'].add(clean)
                             
                 # 4. Favicons
                 for icon in soup.find_all('link', rel=lambda r: r and ('icon' in r or 'shortcut' in r)):
                     href = icon.get('href')
                     if href and not href.startswith('data:'):
-                        clean = config.clean_target_url(href)
+                        clean = urljoin(base_page_url, href)
                         assets['images'].add(clean)
         except Exception:
             pass
