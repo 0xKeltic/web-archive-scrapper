@@ -26,10 +26,10 @@ SESSION = requests.Session()
 SESSION.headers.update(DEFAULT_HEADERS)
 
 # Active Project State (Dynamic)
-CURRENT_URL = 'https://criminalia.es'
-CURRENT_DOMAIN = 'criminalia.es'
-DOMAIN_SLUG = 'criminalia.es'
-CURRENT_TIMESTAMP = '20230711124744'
+CURRENT_URL = 'https://example.com'
+CURRENT_DOMAIN = 'example.com'
+DOMAIN_SLUG = 'example.com'
+CURRENT_TIMESTAMP = '2'
 IS_LIVE_MODE = False
 WAYBACK_RAW_PREFIX = f'https://web.archive.org/web/{CURRENT_TIMESTAMP}id_/'
 

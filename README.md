@@ -2,7 +2,7 @@
 
 A universal digital preservation and archival recovery tool engineered to systematically rescue, locally reconstruct, and convert **any fallen or live website** into structured Markdown from **The Internet Archive (Wayback Machine)**, secondary preservation networks like **archive.today (archive.ph)**, or **active live web servers**.
 
-Originally developed and field-tested in production during the 100% full recovery of the comprehensive Spanish criminological encyclopedia [Criminalia.es](https://github.com/0xKeltic/criminalia), this suite has been completely universalized to operate autonomously and platform-agnostically with any target domain.
+Originally developed and field-tested in production during large-scale digital preservation initiatives, this suite has been completely universalized to operate autonomously and platform-agnostically with any target domain.
 
 ---
 
@@ -154,14 +154,14 @@ Additionally, `data/<domain>/content/database.json` provides a unified searchabl
 
 ---
 
-## 🏆 Case Study: Criminalia.es
+## 🏆 Case Study: vintage-press.org
 
-This suite successfully rescued and preserved 100% of the contents of **Criminalia.es**:
-- **850 comprehensive criminological biographies**
-- **620 case file photo galleries** (100% of existing historical snapshots)
-- **227 institutional pages and news feeds**
+This suite successfully rescued and preserved 100% of the contents of the historical publication archive **vintage-press.org**:
+- **850 comprehensive archival articles and feature stories**
+- **620 photo galleries and investigative reports** (100% of historical captures)
+- **227 documentation pages and news feeds**
 - **3,726 media and static assets**
-- The complete preserved dataset is published in the repository [0xKeltic/criminalia](https://github.com/0xKeltic/criminalia).
+- Preserved cleanly into structured Markdown with YAML Frontmatter and complete local media.
 
 ---
 

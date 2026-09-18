@@ -375,7 +375,7 @@ def run_server(port: int = 8080):
 
 def main():
     parser = argparse.ArgumentParser(description='Universal Web Archive Preview Server')
-    parser.add_argument('--domain', type=str, help='Domain to serve (e.g. criminalia.es, example.org)')
+    parser.add_argument('--domain', type=str, help='Domain to serve (e.g. example.com, example.org)')
     parser.add_argument('--port', type=int, default=8080, help='Local port (default: 8080)')
     args = parser.parse_args()
 

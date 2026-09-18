@@ -1,6 +1,6 @@
 # 🚀 Universalization Plan: From Site-Specific Scraper to Universal Web Archiving Suite
 
-This document details the architecture, file-by-file technical design, and migration plan executed to transform the original **Criminalia.es** scraper into a **100% universal digital preservation suite** capable of rescuing, locally reconstructing, and structuring **any fallen or live website** from Web Archive (Wayback Machine), Archive.today, or active live servers.
+This document details the architecture, file-by-file technical design, and migration plan executed to transform a single-site scraper into a **100% universal digital preservation suite** capable of rescuing, locally reconstructing, and structuring **any fallen or live website** from Web Archive (Wayback Machine), Archive.today, or active live servers.
 
 ---
 
@@ -24,14 +24,14 @@ Where the tool autonomously:
 
 ## 🏗️ Architecture Comparison: Original State vs. Universal Architecture
 
-| Component | Initial State (Criminalia-specific) | Universal State (Any Target Domain) |
+| Component | Initial State (Legacy Site-specific) | Universal State (Any Target Domain) |
 | :--- | :--- | :--- |
 | **Parameters** | Hardcoded domain and date in `config.py` | CLI Arguments (`--url`, `--date`, `--depth`, `--live`) or auto-detected |
 | **Storage** | Fixed folders `data/raw_html/`, `data/assets/` | Isolated workspaces: `data/<domain>/raw_html/`, `data/<domain>/assets/` |
-| **Discovery** | 78 specific alphabetic index queries (`?l=a&g=hombre`) | **Recursive Graph Crawler (BFS)** + Automated `sitemap.xml` / `robots.txt` parser |
-| **Routing** | Hardcoded rules (`/asesino/`, `/material/`, etc.) | Domain-agnostic URL router reproducing original hierarchical directory structures |
+| **Discovery** | Fixed hardcoded index queries | **Recursive Graph Crawler (BFS)** + Automated `sitemap.xml` / `robots.txt` parser |
+| **Routing** | Hardcoded rules (`/category/`, etc.) | Domain-agnostic URL router reproducing original hierarchical directory structures |
 | **Markdown Parsing** | Specific CSS selectors (`.entry-content`, custom meta) | **Automated Heuristic Extraction (Readability / Trafilatura)** |
-| **Local Server** | Static string replacement of `criminalia.es` | Dynamic proxy replacing `target_domain` with relative local paths & live status dashboard |
+| **Local Server** | Static string replacement of `legacy-site.org` | Dynamic proxy replacing `target_domain` with relative local paths & live status dashboard |
 
 ---
 
@@ -41,7 +41,7 @@ Where the tool autonomously:
 * **Design & Implementation:**
   * Removed hardcoded target URLs.
   * Added `init_project(target_url, custom_timestamp=None, depth=3, is_live=False)`:
-    * Extracts sanitized domain (e.g. `example.com`, `criminalia.es`) to define `DOMAIN_SLUG`.
+    * Extracts sanitized domain (e.g. `example.com`, `example.org`) to define `DOMAIN_SLUG`.
     * Dynamically creates workspace directories:
       * `DATA_DIR / DOMAIN_SLUG / manifests`
       * `DATA_DIR / DOMAIN_SLUG / raw_html`
@@ -105,7 +105,7 @@ Where the tool autonomously:
 
 ### 6. `05_parse_articles.py` (Intelligent Markdown Conversion)
 * **Design & Implementation:**
-  * Criminalia previously used site-specific CSS selectors (`div.entry-content`). On general websites (WordPress, Drupal, Joomla, Wix, Ghost, or custom PHP), hardcoded selectors break.
+  * Legacy scrapers frequently used site-specific CSS selectors (`div.entry-content`). On general websites (WordPress, Drupal, Joomla, Wix, Ghost, or custom PHP), hardcoded selectors break.
   * **Universal Solution:** Integrated heuristic libraries **`trafilatura`** and **`markdownify`**:
     * Analyzes DOM text density and semantic markup to automatically extract the title, main article body, date, author, and featured image.
     * Converts clean DOM trees to Markdown with rewritten local asset links.

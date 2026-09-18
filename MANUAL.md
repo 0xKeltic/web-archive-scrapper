@@ -6,7 +6,7 @@ A comprehensive engineering reference for the extraction, multi-tier historical 
 
 ## 1. System Overview
 
-Websites frequently disappear due to domain expirations, censorship, lack of maintenance, or author demise (as with the flagship case study **Criminalia.es**, authored by the late criminologist Juan Ignacio Blanco). This preservation suite was engineered to systematically recover 100% of any targeted website—including full article hierarchies, photo galleries, case files, stylesheets, scripts, and media assets—transforming raw archive snapshots into clean, structured Markdown ready for modern Jamstack deployment (Next.js, Astro, Nuxt, Hugo).
+Websites frequently disappear due to domain expirations, censorship, lack of maintenance, or publisher shutdown (such as independent news portals and archival encyclopedias like **vintage-press.org**). This preservation suite was engineered to systematically recover 100% of any targeted website—including full article hierarchies, photo galleries, case files, stylesheets, scripts, and media assets—transforming raw archive snapshots into clean, structured Markdown ready for modern Jamstack deployment (Next.js, Astro, Nuxt, Hugo).
 
 ### Core Capabilities:
 1. **Universal & CMS-Agnostic:** Operates without requiring prior knowledge of the site's underlying engine (WordPress, Drupal, Joomla, Ghost, custom PHP, or static HTML).
