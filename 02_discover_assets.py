@@ -14,7 +14,7 @@ STATIC_EXTENSIONS = (
 
 def discover_assets_from_cdx(domain: str) -> dict:
     """Queries Wayback CDX API for all archived static assets under the target domain."""
-    logger.info(f'Consultando API CDX de Wayback para catalogar assets estaticos de {domain}...')
+    logger.info(f'Querying Wayback CDX API to catalog static assets for {domain}...')
     assets = {
         'css': set(),
         'js': set(),
@@ -49,9 +49,9 @@ def discover_assets_from_cdx(domain: str) -> dict:
                     assets['other'].add(orig_url)
                     
             total_cdx = sum(len(v) for v in assets.values())
-            logger.info(f'API CDX devolvio {total_cdx} assets estaticos unicos.')
+            logger.info(f'CDX API returned {total_cdx} unique static assets.')
     except Exception as e:
-        logger.warning(f'No se pudo consultar CDX para assets ({e}). Se continuara con el escaneo de HTML.')
+        logger.warning(f'Could not query CDX for assets ({e}). Proceeding with HTML scanning.')
         
     return assets
 
@@ -65,7 +65,7 @@ def scan_html_for_assets(domain: str, assets: dict) -> dict:
     if not html_files:
         return assets
 
-    logger.info(f'Escaneando {len(html_files)} archivos HTML locales para extraer recursos...')
+    logger.info(f'Scanning {len(html_files)} local HTML files to extract static assets...')
     
     for html_file in html_files:
         try:
@@ -110,7 +110,7 @@ def scan_html_for_assets(domain: str, assets: dict) -> dict:
 def main():
     domain = config.CURRENT_DOMAIN
     if config.IS_LIVE_MODE:
-        logger.info(f'Modo web en vivo activo: omitiendo API CDX de Wayback. Descubriendo assets desde HTMLs...')
+        logger.info(f'Live web mode active: skipping Wayback CDX API. Discovering assets from HTML files...')
         assets = {
             'css': set(),
             'js': set(),
@@ -135,7 +135,7 @@ def main():
     with open(manifest_file, 'w', encoding='utf-8') as f:
         json.dump(export_data, f, indent=2, ensure_ascii=False)
         
-    logger.success(f'Inventario de assets completado: {export_data["total_assets"]} recursos guardados en {manifest_file}')
+    logger.success(f'Asset inventory completed: {export_data["total_assets"]} resources saved to {manifest_file}')
 
 if __name__ == '__main__':
     main()

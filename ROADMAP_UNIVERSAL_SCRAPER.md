@@ -1,152 +1,152 @@
-# 🚀 Plan de Universalización: De Scraper Específico a Suite Universal de Archivo Web
+# 🚀 Universalization Plan: From Site-Specific Scraper to Universal Web Archiving Suite
 
-Este documento detalla la arquitectura, los cambios técnicos archivo por archivo y el plan de migración para transformar el scraper actual de **Criminalia.es** en una herramienta **100% universal** capaz de rescatar, reconstruir localmente y estructurar **cualquier sitio web caído** a partir de Web Archive (Wayback Machine) y Archive.today.
+This document details the architecture, file-by-file technical design, and migration plan executed to transform the original **Criminalia.es** scraper into a **100% universal digital preservation suite** capable of rescuing, locally reconstructing, and structuring **any fallen or live website** from Web Archive (Wayback Machine), Archive.today, or active live servers.
 
 ---
 
-## 🎯 Objetivo de la Generalización
+## 🎯 Universalization Objectives
 
-Convertir la suite en un CLI multipropósito ejecutable con:
+Transform the suite into a multi-purpose CLI runnable with:
 
 ```bash
-python run_pipeline.py --url https://cualquier-web.com [opciones]
+python run_pipeline.py --url https://any-website.com [options]
 ```
 
-Donde la herramienta:
-1. Detecte automáticamente si existe sitemap (`sitemap.xml`, `robots.txt`).
-2. Si no hay sitemap, realice un **rastreo recursivo por grafos (BFS Crawler)** empezando en la portada `/` hasta descubrir el 100% de las páginas internas.
-3. Almacene los datos de forma aislada en `data/<dominio>/...` (permitiendo archivar múltiples webs sin colisiones).
-4. Descargue y reconstruya todos los estilos CSS, fuentes, scripts e imágenes.
-5. Emplee un motor de extracción inteligente de contenido (estilo **Readability / Trafilatura**) para convertir cualquier artículo a Markdown sin necesidad de configurar selectores CSS a mano.
-6. Permita previsualizar la web archivada en `http://localhost:8080` de forma idéntica a la original.
+Where the tool autonomously:
+1. Detects whether sitemaps exist (`sitemap.xml`, `robots.txt`).
+2. If no sitemap exists, executes a **recursive graph crawler (Breadth-First Search)** starting from the root `/` to discover 100% of internal pages.
+3. Stores data in isolated domain workspaces under `data/<domain>/...` (allowing concurrent preservation without collisions).
+4. Downloads and reconstructs all CSS stylesheets, fonts, scripts, and multimedia images.
+5. Employs an intelligent heuristic content extraction engine (**Readability / Trafilatura**) to convert any article to Markdown without requiring hand-coded CSS selectors.
+6. Allows high-fidelity local browser preview at `http://localhost:8080/` replicating the original look-and-feel.
 
 ---
 
-## 🏗️ Comparativa de Arquitectura: Estado Actual vs. Universal
+## 🏗️ Architecture Comparison: Original State vs. Universal Architecture
 
-| Componente | Estado Actual (Criminalia) | Estado Universal (Cualquier Web) |
+| Component | Initial State (Criminalia-specific) | Universal State (Any Target Domain) |
 | :--- | :--- | :--- |
-| **Parámetros** | Dominio y fecha fijos en `config.py` | Argumentos CLI (`--url`, `--date`, `--depth`, `--workers`) o `.env` |
-| **Almacenamiento** | Carpeta fija `data/raw_html/`, `data/assets/` | Espacios aislados: `data/<dominio>/raw_html/`, `data/<dominio>/assets/` |
-| **Descubrimiento** | 78 índices alfabéticos propios de Juan Ignacio Blanco (`?l=a&g=hombre`) | **Crawler Recursivo por Grafos (BFS/DFS)** + Parser automático de `sitemap.xml` |
-| **Rutas y Menús** | Reglas manuales (`/asesino/`, `/material/`, etc.) | Enrutador agnóstico de URLs que reproduce la estructura de rutas original |
-| **Parseo Markdown** | Selectores CSS específicos (`.entry-content`, metadatos) | **Extracción heurística automática (Readability / Trafilatura)** + opción de selectores custom |
-| **Servidor Local** | Reemplazo estático de strings `criminalia.es` | Proxy dinámico que sustituye `target_domain` por rutas relativas locales |
+| **Parameters** | Hardcoded domain and date in `config.py` | CLI Arguments (`--url`, `--date`, `--depth`, `--live`) or auto-detected |
+| **Storage** | Fixed folders `data/raw_html/`, `data/assets/` | Isolated workspaces: `data/<domain>/raw_html/`, `data/<domain>/assets/` |
+| **Discovery** | 78 specific alphabetic index queries (`?l=a&g=hombre`) | **Recursive Graph Crawler (BFS)** + Automated `sitemap.xml` / `robots.txt` parser |
+| **Routing** | Hardcoded rules (`/asesino/`, `/material/`, etc.) | Domain-agnostic URL router reproducing original hierarchical directory structures |
+| **Markdown Parsing** | Specific CSS selectors (`.entry-content`, custom meta) | **Automated Heuristic Extraction (Readability / Trafilatura)** |
+| **Local Server** | Static string replacement of `criminalia.es` | Dynamic proxy replacing `target_domain` with relative local paths & live status dashboard |
 
 ---
 
-## 📋 Lista de Cambios Archivo por Archivo
+## 📋 File-by-File Technical Specifications
 
-### 1. `config.py` (Gestión Dinámica de Configuración)
-* **Cambios a realizar:**
-  * Eliminar `ORIGINAL_BASE_URL = 'https://criminalia.es'` hardcodeado.
-  * Añadir función `init_project(target_url, custom_timestamp=None)`:
-    * Extrae el dominio limpio (ej. `criminalia.es`, `otra-web.org`) para nombrarlo `DOMAIN_SLUG`.
-    * Define dinámicamente las carpetas:
+### 1. `config.py` (Dynamic Configuration & Fallback Engine)
+* **Design & Implementation:**
+  * Removed hardcoded target URLs.
+  * Added `init_project(target_url, custom_timestamp=None, depth=3, is_live=False)`:
+    * Extracts sanitized domain (e.g. `example.com`, `criminalia.es`) to define `DOMAIN_SLUG`.
+    * Dynamically creates workspace directories:
       * `DATA_DIR / DOMAIN_SLUG / manifests`
       * `DATA_DIR / DOMAIN_SLUG / raw_html`
       * `DATA_DIR / DOMAIN_SLUG / assets`
       * `DATA_DIR / DOMAIN_SLUG / content`
-  * Detección automática del mejor snapshot:
-    * Si el usuario no pasa una fecha fija, consultar la API CDX de Wayback Machine (`/cdx/search/cdx?url=dominio&output=json&limit=1`) para fijar la última instantánea válida antes de la caída.
-  * Mantener 100% intacto el **Motor en Cascada de 3 Niveles** (`fetch_with_retry`), ya que es agnóstico y universal.
+  * Automated snapshot timestamp detection:
+    * If no fixed date is provided, queries Wayback Machine's CDX Server API with reverse sort to lock onto the latest snapshot before site demise.
+  * Preserves the **3-Tier Cascading Fallback Engine** (`fetch_with_retry`) supporting both historical archive and live web modes.
 
 ---
 
-### 2. `01_discover_sitemap.py` → `01_crawler.py` (Crawler Recursivo Universal)
-* **Cambios a realizar:**
-  * Sustituir el bucle alfabético de 78 consultas por un motor de rastreo en dos fases:
-    1. **Fase A (Sitemaps y Robots):** Comprobar si Wayback Machine tiene copias de:
+### 2. `01_crawler.py` (Universal Recursive BFS Graph Crawler)
+* **Design & Implementation:**
+  * Replaced manual catalog querying with a two-phase discovery engine:
+    1. **Phase A (Sitemaps & Robots):** Inspects candidate endpoints:
        * `/robots.txt`
        * `/sitemap.xml`
        * `/sitemap_index.xml`
-       * Si existen, extraer todas las URLs de golpe (ahorra horas de rastreo).
-    2. **Fase B (Crawler Recursivo BFS por Grafos):**
-       * Si no hay sitemap (o para complementar), arrancar en la portada `/`.
-       * Cola de URLs pendientes (`queue = deque(['/'])`) y conjunto de visitadas (`visited = set()`).
-       * Por cada página descargada:
-         * Extraer todos los `<a href="...">`.
-         * Normalizar URLs descartando enlaces externos, anclas `#`, parámetros de sesión y archivos binarios.
-         * Encolar nuevas URLs internas no visitadas hasta una profundidad configurable (`--depth`).
-  * Generar `data/<dominio>/manifests/pages_manifest.json`.
+       * Extracts all internal URLs in bulk when available.
+    2. **Phase B (Recursive BFS Graph Crawler):**
+       * Seeds crawler from root `/` and any discovered sitemap links.
+       * Queue of pending URLs (`queue = deque()`) and set of visited URLs (`visited = set()`).
+       * For each retrieved HTML page:
+         * Extracts internal `<a href="...">` links.
+         * Normalizes URLs, stripping external domains, `#` fragments, session queries, and binary files.
+         * Enqueues unvisited internal links up to `--depth`.
+  * Generates `data/<domain>/manifests/pages_manifest.json`.
 
 ---
 
-### 3. `02_discover_assets.py` (Inventario Dinámico de Recursos)
-* **Cambios a realizar:**
-  * Ya no buscar únicamente en plantillas fijas.
-  * Analizar la totalidad de los HTMLs descubiertos en la Fase 1:
-    * `<link rel="stylesheet">` $ightarrow$ Hojas de estilo CSS.
-    * `<script src="...">` $ightarrow$ Scripts JS.
-    * `<link rel="icon">`, `<link rel="apple-touch-icon">` $ightarrow$ Favicons.
-    * `<img src="...">`, `data-src`, `srcset` $ightarrow$ Imágenes.
-    * Reglas CSS `@font-face` y `background: url(...)` $ightarrow$ Tipografías y fondos.
-  * Generar `data/<dominio>/manifests/assets_manifest.json`.
+### 3. `02_discover_assets.py` (Dynamic Asset Inventory)
+* **Design & Implementation:**
+  * Queries Wayback CDX API for archived static assets under the domain (in archive mode).
+  * Scans all discovered local HTML pages:
+    * `<link rel="stylesheet">` $\rightarrow$ CSS stylesheets.
+    * `<script src="...">` $\rightarrow$ JS scripts.
+    * `<link rel="icon">`, `<link rel="apple-touch-icon">` $\rightarrow$ Favicons.
+    * `<img src="...">`, `data-src`, `data-lazy-src` $\rightarrow$ Images.
+    * CSS rules `@font-face` and `background: url(...)` $\rightarrow$ Fonts and background images.
+  * Generates `data/<domain>/manifests/assets_manifest.json`.
 
 ---
 
-### 4. `03_download_html.py` (Descargador Masivo Agrupado)
-* **Cambios a realizar:**
-  * Unificar `03_download_html.py` y `03b_download_standalone.py` en un único gestor de descarga masiva.
-  * Leer `pages_manifest.json`.
-  * Guardar cada página recreando su jerarquía original o con un nombre unívoco seguro:
-    * `dominio.com/noticias/caso-1/` $ightarrow$ `raw_html/noticias/caso-1.html`.
-  * Sistema de reanudación automática (idempotente: si el archivo existe y pesa > 0, se salta).
+### 4. `03_download_html.py` (Bulk HTML Downloader)
+* **Design & Implementation:**
+  * Reads `pages_manifest.json`.
+  * Downloads each page recreating original URL directory structure on disk:
+    * `example.com/news/case-1/` $\rightarrow$ `raw_html/news/case-1.html`.
+  * Idempotent resume capability: automatically skips existing files.
 
 ---
 
-### 5. `04_download_assets.py` (Descarga de Multimedia y Estilos)
-* **Cambios a realizar:**
-  * Este módulo ya es un 90% genérico.
-  * Único cambio: recrear la estructura de carpetas de origen bajo `data/<dominio>/assets/`.
-    * Ejemplo: `https://otra-web.com/static/css/theme.css` $ightarrow$ `data/<dominio>/assets/static/css/theme.css`.
-  * Soporte de reintento automático con cabeceras `Referer` auténticas para evitar defensas hotlink.
+### 5. `04_download_assets.py` (Multimedia & Stylesheet Downloader)
+* **Design & Implementation:**
+  * Recreates origin directory hierarchy under `data/<domain>/assets/`.
+    * Example: `https://example.com/static/css/theme.css` $\rightarrow$ `data/<domain>/assets/static/css/theme.css`.
+  * Recursive extraction of sub-resources (fonts and images declared in CSS files).
+  * Automatic retry support with authentic `Referer` headers.
 
 ---
 
-### 6. `05_parse_articles.py` (Conversor Inteligente a Markdown)
-* **Cambios a realizar:**
-  * En Criminalia se usaban selectores hardcodeados (`div.entry-content`). En una web genérica (por ejemplo hecha en Drupal, Joomla, Wix, Medium o código a medida), esos selectores fallarían.
-  * **Solución Universal:** Integrar la librería **`readability-lxml`** o **`trafilatura`**:
-    * Analiza la densidad de texto del DOM y extrae automáticamente el titular, cuerpo principal, fecha y autor sin necesidad de saber qué CMS utilizaba la web.
-    * Convierte el árbol limpio a Markdown con `markdownify`.
-    * Añade Frontmatter YAML estandarizado (`title`, `date`, `url`, `author`, `slug`).
-  * Añadir opción de "selectores manuales" en un archivo JSON para cuando el usuario quiera afinar una web concreta.
+### 6. `05_parse_articles.py` (Intelligent Markdown Conversion)
+* **Design & Implementation:**
+  * Criminalia previously used site-specific CSS selectors (`div.entry-content`). On general websites (WordPress, Drupal, Joomla, Wix, Ghost, or custom PHP), hardcoded selectors break.
+  * **Universal Solution:** Integrated heuristic libraries **`trafilatura`** and **`markdownify`**:
+    * Analyzes DOM text density and semantic markup to automatically extract the title, main article body, date, author, and featured image.
+    * Converts clean DOM trees to Markdown with rewritten local asset links.
+    * Generates standardized YAML Frontmatter (`title`, `date`, `url`, `author`, `slug`, `featured_image`).
+    * Produces a unified `database.json` index.
 
 ---
 
-### 7. `preview_server.py` (Servidor Local Universal)
-* **Cambios a realizar:**
-  * Parámetro para indicar qué web archivada se desea servir: `python preview_server.py --site otra-web.org`.
-  * El enrutador universal sustituye `target_domain` por la raíz local `/`:
-    * Si pide un asset (`.css`, `.js`, `.png`, `.jpg`, `.woff2`, etc.) $ightarrow$ sirve desde `assets/` o lo baja al vuelo.
-    * Si pide una página HTML $ightarrow$ sirve desde `raw_html/` o la baja al vuelo.
-  * El panel `/status` lee automáticamente las estadísticas del dominio seleccionado.
+### 7. `preview_server.py` (Universal Local Preview Server)
+* **Design & Implementation:**
+  * Multi-site dynamic context switching via cookie or query string (`/?site=domain.com`).
+  * Universal URL router that maps requests to local relative paths:
+    * Static assets (`.css`, `.js`, `.png`, `.jpg`, `.woff2`, etc.) $\rightarrow$ served from `assets/` or rescued on-the-fly.
+    * HTML pages $\rightarrow$ served from `raw_html/` or rescued on-the-fly.
+  * Real-time preservation dashboard at `/status` displaying live page counts, asset counts, and auto-refresh.
 
 ---
 
-### 8. `run_pipeline.py` (Orquestador CLI Moderno con `argparse`)
-* **Nueva Interfaz de Usuario:**
+### 8. `run_pipeline.py` (Modern CLI Orchestrator with `argparse`)
+* **CLI User Interface:**
 
 ```bash
-# Archivar cualquier sitio web por completo:
-python run_pipeline.py --url https://ejemplo-crimen.org --all
+# Archive any website completely:
+python run_pipeline.py --url https://example.org --all
 
-# Archivar con fecha histórica concreta:
-python run_pipeline.py --url https://ejemplo-crimen.org --date 20190501 --all
+# Scrape an active live website directly:
+python run_pipeline.py --url https://example.org --live --all
 
-# Ejecutar paso específico:
-python run_pipeline.py --url https://ejemplo-crimen.org --step 1  # Solo rastreo
+# Archive with explicit historical snapshot timestamp:
+python run_pipeline.py --url https://example.org --date 20190501 --all
 
-# Lanzar servidor de previsualización local:
-python run_pipeline.py --url https://ejemplo-crimen.org --serve
+# Execute a specific modular step:
+python run_pipeline.py --url https://example.org --step 1  # Crawler only
+
+# Launch local preview server:
+python run_pipeline.py --url https://example.org --serve
 ```
 
 ---
 
-## 🛠️ Dependencias Nuevas a Añadir a `requirements.txt`
-
-Para soportar extracción agnóstica de contenidos y crawler eficiente:
+## 🛠️ Required Dependencies in `requirements.txt`
 
 ```txt
 requests>=2.31.0
@@ -161,11 +161,10 @@ python-dateutil>=2.8.2
 
 ---
 
-## 📌 Conclusión y Hoja de Ruta
+## 📌 Summary & Engineering Achievements
 
-La ventaja estratégica es que **el trabajo más complejo ya está resuelto y probado en producción**:
-1. Resolver los falsos 404 de Wayback Machine con el comodín `2id_` entre 2015 y 2022.
-2. La integración y fallback automático a `archive.today` / `archive.is`.
-3. La reescritura de URLs y el servidor local al vuelo.
+1. Mitigated historical Wayback Machine 404 gaps using wildcard `2id_` across multi-year captures.
+2. Built automated secondary fallback to the `archive.today` / `archive.ph` preservation network.
+3. Implemented high-fidelity local browser preview server with dynamic URL rewriting and real-time on-the-fly rescue.
+4. Seamlessly unified historical archive mode and active live web mode (`--live`) within a modular, idempotent pipeline architecture.
 
-Para dar el siguiente paso y universalizar el proyecto, simplemente se reemplaza el buscador de Criminalia por el rastreador BFS estándar y se parametrizan los directorios por dominio.

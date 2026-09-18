@@ -108,12 +108,12 @@ def extract_article_universal(html: str, file_path: Path) -> dict:
 def export_all():
     raw_dir = config.RAW_HTML_DIR
     if not raw_dir.exists():
-        logger.error(f'Directorio de HTMLs no existe: {raw_dir}. Ejecuta primero el paso 3.')
+        logger.error(f'HTML directory does not exist: {raw_dir}. Please run step 3 first.')
         return
 
     all_htmls = list(raw_dir.rglob('*.html'))
     total = len(all_htmls)
-    logger.info(f'Iniciando extraccion heuristica y exportacion a Markdown de {total} paginas...')
+    logger.info(f'Starting heuristic extraction and Markdown export for {total} pages...')
 
     database = []
 
@@ -153,15 +153,15 @@ def export_all():
                 'excerpt': parsed['excerpt']
             })
         except Exception as e:
-            logger.debug(f'Error procesando {html_path}: {e}')
+            logger.debug(f'Error processing {html_path}: {e}')
 
     # Global structured database
     db_file = config.CONTENT_DIR / 'database.json'
     with open(db_file, 'w', encoding='utf-8') as f:
         json.dump(database, f, ensure_ascii=False, indent=2)
 
-    logger.success(f'Exportacion completa: {len(database)} documentos convertidos a Markdown en {config.CONTENT_DIR}')
-    logger.info(f'Catalogo global unificado: {db_file}')
+    logger.success(f'Export completed: {len(database)} documents converted to Markdown in {config.CONTENT_DIR}')
+    logger.info(f'Unified global catalog: {db_file}')
 
 def main():
     export_all()

@@ -8,7 +8,7 @@ import config
 def download_all_pages():
     manifest_file = config.MANIFESTS_DIR / 'pages_manifest.json'
     if not manifest_file.exists():
-        logger.error(f'No se encontro {manifest_file}. Ejecuta primero el paso 1 (01_crawler.py)')
+        logger.error(f'Manifest not found: {manifest_file}. Please run step 1 first (01_crawler.py)')
         return
 
     with open(manifest_file, 'r', encoding='utf-8') as f:
@@ -16,7 +16,7 @@ def download_all_pages():
 
     pages = data.get('pages', [])
     total = len(pages)
-    logger.info(f'Iniciando descarga de {total} paginas HTML para {config.CURRENT_DOMAIN}...')
+    logger.info(f'Starting download of {total} HTML pages for {config.CURRENT_DOMAIN}...')
 
     missing_file = config.MANIFESTS_DIR / 'missing_pages.json'
     missing_pages = set()
@@ -44,7 +44,7 @@ def download_all_pages():
             skipped += 1
             continue
 
-        logger.info(f'[{idx}/{total}] Descargando pagina: {rel_path}...')
+        logger.info(f'[{idx}/{total}] Downloading page: {rel_path}...')
         html = config.fetch_with_retry(url)
         
         if html and len(html) > 200:
@@ -70,7 +70,7 @@ def download_all_pages():
     except Exception:
         pass
 
-    logger.success(f'Descarga de paginas finalizada: {success} nuevas, {skipped} ya existian, {failed} fallidas.')
+    logger.success(f'HTML download finished: {success} new, {skipped} already existed, {failed} failed.')
 
 def main():
     download_all_pages()

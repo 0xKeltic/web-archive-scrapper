@@ -38,7 +38,7 @@ def download_all_assets():
     missing_file = config.MANIFESTS_DIR / 'missing_assets.json'
     
     if not manifest_file.exists():
-        logger.error(f'No se encontro {manifest_file}. Ejecuta primero el paso 2 (02_discover_assets.py)')
+        logger.error(f'Manifest not found: {manifest_file}. Please run step 2 first (02_discover_assets.py)')
         return
 
     missing_assets = set()
@@ -57,8 +57,8 @@ def download_all_assets():
 
     all_target_urls = sorted(list(manifest_assets))
     total = len(all_target_urls)
-    logger.info(f'Iniciando descarga de {total} assets (CSS, JS, Fuentes, Imagenes) para {config.CURRENT_DOMAIN}...')
-    logger.info(f'Memoria de cache: {len(missing_assets)} recursos marcados previamente como no archivados (404).')
+    logger.info(f'Starting download of {total} assets (CSS, JS, Fonts, Images) for {config.CURRENT_DOMAIN}...')
+    logger.info(f'Cache memory: {len(missing_assets)} resources previously recorded as missing (404).')
     
     css_extra_assets = set()
     success = 0
@@ -80,7 +80,7 @@ def download_all_assets():
             skipped += 1
             continue
             
-        logger.info(f'[{idx}/{total}] Descargando asset: {rel_path}...')
+        logger.info(f'[{idx}/{total}] Downloading asset: {rel_path}...')
         res = download_asset(url, is_binary=True)
         if res:
             success += 1
@@ -108,7 +108,7 @@ def download_all_assets():
         time.sleep(0.2)
         
     if css_extra_assets:
-        logger.info(f'Descargando {len(css_extra_assets)} sub-recursos descubiertos en archivos CSS...')
+        logger.info(f'Downloading {len(css_extra_assets)} nested sub-resources discovered in CSS files...')
         for ext_url in css_extra_assets:
             download_asset(ext_url, is_binary=True)
             time.sleep(0.2)
@@ -119,7 +119,7 @@ def download_all_assets():
     except Exception:
         pass
         
-    logger.success(f'Descarga de assets finalizada: {success} nuevos, {skipped} ya existian, {failed} fallidos.')
+    logger.success(f'Asset download finished: {success} new, {skipped} already existed, {failed} failed.')
 
 def main():
     download_all_assets()

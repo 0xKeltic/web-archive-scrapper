@@ -52,12 +52,12 @@ def parse_xml_sitemap(xml_text: str, domain: str) -> set:
                 if is_internal_url(loc, domain):
                     urls.add(loc)
     except Exception as e:
-        logger.debug(f'Error parseando XML sitemap: {e}')
+        logger.debug(f'Error parsing XML sitemap: {e}')
     return urls
 
 def discover_sitemaps(domain: str) -> set:
-    source_label = "en vivo" if config.IS_LIVE_MODE else "en Wayback"
-    logger.info(f'Buscando sitemaps y robots.txt {source_label} para {domain}...')
+    source_label = "live" if config.IS_LIVE_MODE else "in Wayback"
+    logger.info(f'Searching for sitemaps and robots.txt {source_label} for {domain}...')
     discovered = set()
     
     for path in SITEMAP_CANDIDATES:
@@ -74,11 +74,11 @@ def discover_sitemaps(domain: str) -> set:
                     if s_data:
                         found = parse_xml_sitemap(s_data, domain)
                         discovered.update(found)
-                        logger.info(f'Encontradas {len(found)} URLs desde robots.txt -> {sitemap_url}')
+                        logger.info(f'Found {len(found)} URLs from robots.txt -> {sitemap_url}')
         elif '<?xml' in data or '<urlset' in data or '<sitemapindex' in data:
             found = parse_xml_sitemap(data, domain)
             discovered.update(found)
-            logger.info(f'Encontradas {len(found)} URLs en {path}')
+            logger.info(f'Found {len(found)} URLs in {path}')
             
     return discovered
 
@@ -86,7 +86,7 @@ def crawl_site_bfs(start_url: str, max_depth: int = 3, max_pages: int = 5000):
     domain = config.CURRENT_DOMAIN
     start_url = config.clean_target_url(start_url)
     
-    logger.info(f'Iniciando crawler BFS para {start_url} (Profundidad maxima: {max_depth})...')
+    logger.info(f'Starting BFS crawler for {start_url} (Max depth: {max_depth})...')
     
     # Check sitemaps first
     sitemap_urls = discover_sitemaps(domain)
@@ -120,7 +120,7 @@ def crawl_site_bfs(start_url: str, max_depth: int = 3, max_pages: int = 5000):
         if ext in EXCLUDED_EXTENSIONS:
             continue
 
-        logger.info(f'[{len(visited)}] [Nivel {depth}] Rastreando: {clean_url}')
+        logger.info(f'[{len(visited)}] [Depth {depth}] Crawling: {clean_url}')
         
         rel_path = config.url_to_relative_path(clean_url)
         target_file = config.RAW_HTML_DIR / rel_path
@@ -130,7 +130,7 @@ def crawl_site_bfs(start_url: str, max_depth: int = 3, max_pages: int = 5000):
             try:
                 with open(target_file, 'r', encoding='utf-8', errors='ignore') as f:
                     html = f.read()
-                logger.debug(f'[Cache Local] Usando HTML local: {rel_path}')
+                logger.debug(f'[Local Cache] Using local HTML: {rel_path}')
             except Exception:
                 html = None
 
@@ -143,7 +143,7 @@ def crawl_site_bfs(start_url: str, max_depth: int = 3, max_pages: int = 5000):
                 with open(target_file, 'w', encoding='utf-8', errors='ignore') as f:
                     f.write(html)
             except Exception as e:
-                logger.debug(f'Error guardando HTML local de {clean_url}: {e}')
+                logger.debug(f'Error saving local HTML for {clean_url}: {e}')
             time.sleep(0.15)
 
         title = ''
@@ -188,7 +188,7 @@ def crawl_site_bfs(start_url: str, max_depth: int = 3, max_pages: int = 5000):
     with open(manifest_file, 'w', encoding='utf-8') as f:
         json.dump(manifest_data, f, indent=2, ensure_ascii=False)
 
-    logger.success(f'Rastreo finalizado: {len(pages_catalog)} paginas descubiertas guardadas en {manifest_file}')
+    logger.success(f'Crawl finished: {len(pages_catalog)} pages discovered saved to {manifest_file}')
     return pages_catalog
 
 def main():

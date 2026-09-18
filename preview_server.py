@@ -151,15 +151,15 @@ class UniversalPreviewHandler(http.server.BaseHTTPRequestHandler):
                             is_live = c.get('is_live', False)
                             ts = c.get('timestamp', '')
                     except Exception as e:
-                        logger.warning(f'Error leyendo {cfg_file}: {e}')
+                        logger.warning(f'Error reading {cfg_file}: {e}')
 
                 pages_count = len(list((p / 'raw_html').rglob('*.html'))) if (p / 'raw_html').exists() else 0
                 assets_count = len(list((p / 'assets').rglob('*.*'))) if (p / 'assets').exists() else 0
                 markdowns_count = len(list((p / 'content').rglob('*.md'))) if (p / 'content').exists() else 0
 
                 is_active = (domain_name == target_domain)
-                mode_badge = '<span class="badge badge-live">🌐 EN VIVO</span>' if is_live else f'<span class="badge badge-archive">🏛️ WAYBACK: {ts}</span>'
-                active_pill = '<span class="active-tag">Activo en Navegador</span>' if is_active else ''
+                mode_badge = '<span class="badge badge-live">🌐 LIVE</span>' if is_live else f'<span class="badge badge-archive">🏛️ WAYBACK: {ts}</span>'
+                active_pill = '<span class="active-tag">Active in Browser</span>' if is_active else ''
                 border_style = 'border: 2px solid #0284c7;' if is_active else 'border: 1px solid #334155;'
 
                 cards_html.append(f"""
@@ -170,20 +170,20 @@ class UniversalPreviewHandler(http.server.BaseHTTPRequestHandler):
                             {mode_badge}
                             {active_pill}
                         </div>
-                        <a href="/?site={domain_name}" class="btn-explore">Explorar Web →</a>
+                        <a href="/?site={domain_name}" class="btn-explore">Explore Website →</a>
                     </div>
                     <div class="stat-grid">
                         <div class="stat-item">
                             <span class="stat-num">{pages_count}</span>
-                            <span class="stat-lbl">📄 Páginas HTML</span>
+                            <span class="stat-lbl">📄 HTML Pages</span>
                         </div>
                         <div class="stat-item">
                             <span class="stat-num">{assets_count}</span>
-                            <span class="stat-lbl">💾 Assets / Multimedia</span>
+                            <span class="stat-lbl">💾 Assets / Media</span>
                         </div>
                         <div class="stat-item">
                             <span class="stat-num">{markdowns_count}</span>
-                            <span class="stat-lbl">📝 Documentos Markdown</span>
+                            <span class="stat-lbl">📝 Markdown Docs</span>
                         </div>
                     </div>
                 </div>
@@ -191,17 +191,17 @@ class UniversalPreviewHandler(http.server.BaseHTTPRequestHandler):
 
             cards_rendered = "\n".join(cards_html) if cards_html else """
                 <div class="card" style="text-align: center; padding: 40px;">
-                    <p style="color: #94a3b8; font-size: 16px;">No hay sitios descargados en data/ todavía.</p>
-                    <p style="color: #64748b; font-size: 14px;">Ejecuta <code>python run_pipeline.py --url &lt;URL&gt; --all</code> para comenzar.</p>
+                    <p style="color: #94a3b8; font-size: 16px;">No websites saved in data/ yet.</p>
+                    <p style="color: #64748b; font-size: 14px;">Run <code>python run_pipeline.py --url &lt;URL&gt; --all</code> to begin.</p>
                 </div>
             """
 
             total_projects = len(projects)
             status_html = f"""<!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Monitor de Preservación Multi-Sitio</title>
+    <title>Multi-Site Preservation Dashboard</title>
     <style>
         body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #f8fafc; padding: 30px 20px; margin: 0; }}
         .container {{ max-width: 860px; margin: 0 auto; }}
@@ -226,8 +226,8 @@ class UniversalPreviewHandler(http.server.BaseHTTPRequestHandler):
 <body>
     <div class="container">
         <header>
-            <h1>🌐 Monitor Multi-Sitio <span style="font-size: 14px; color: #94a3b8; font-weight: normal;">({total_projects} proyectos en disco)</span></h1>
-            <span class="refresh-pill" id="countdown-badge">Auto-refresco 2s</span>
+            <h1>🌐 Multi-Site Monitor <span style="font-size: 14px; color: #94a3b8; font-weight: normal;">({total_projects} projects on disk)</span></h1>
+            <span class="refresh-pill" id="countdown-badge">Auto-refresh 2s</span>
         </header>
         {cards_rendered}
     </div>
@@ -237,10 +237,10 @@ class UniversalPreviewHandler(http.server.BaseHTTPRequestHandler):
         setInterval(() => {{
             remaining--;
             if (remaining <= 0) {{
-                if (badge) badge.innerText = 'Refrescando...';
+                if (badge) badge.innerText = 'Refreshing...';
                 location.reload();
             }} else {{
-                if (badge) badge.innerText = 'Auto-refresco ' + remaining + 's';
+                if (badge) badge.innerText = 'Auto-refresh ' + remaining + 's';
             }}
         }}, 1000);
     </script>
@@ -272,7 +272,7 @@ class UniversalPreviewHandler(http.server.BaseHTTPRequestHandler):
 
             # Dynamic on-the-fly rescue
             original_asset_url = f'https://{target_domain}/{rel_asset}'
-            logger.info(f'[{target_domain}] [On-The-Fly Asset] Descargando recurso: {rel_asset}...')
+            logger.info(f'[{target_domain}] [On-The-Fly Asset] Rescuing resource: {rel_asset}...')
             data = config.fetch_with_retry(original_asset_url, is_binary=True, timeout=8)
             if data:
                 local_asset.parent.mkdir(parents=True, exist_ok=True)
@@ -280,7 +280,7 @@ class UniversalPreviewHandler(http.server.BaseHTTPRequestHandler):
                 self.send_asset_file(local_asset, cookie=new_cookie)
                 return
             else:
-                self.send_error(404, f'Asset no encontrado: {rel_asset}')
+                self.send_error(404, f'Asset not found: {rel_asset}')
                 return
 
         # 3. SERVE HTML PAGES
@@ -312,7 +312,7 @@ class UniversalPreviewHandler(http.server.BaseHTTPRequestHandler):
 
         # 4. DYNAMIC CATCH-ALL ON-THE-FLY RESCUE
         full_target_url = f'https://{target_domain}{url_path}'
-        logger.info(f'[{target_domain}] [On-The-Fly] Rescatando pagina: {full_target_url}...')
+        logger.info(f'[{target_domain}] [On-The-Fly] Rescuing page: {full_target_url}...')
         fetched_content = config.fetch_with_retry(full_target_url, timeout=8)
         if fetched_content and len(fetched_content) > 100:
             target_html_file = raw_html_dir / clean_rel
@@ -332,10 +332,10 @@ class UniversalPreviewHandler(http.server.BaseHTTPRequestHandler):
 
         # 5. 404 NOT FOUND PAGE
         not_found_html = f"""<!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>404 - Pagina no archivada</title>
+    <title>404 - Page not archived</title>
     <style>
         body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #f8fafc; padding: 50px 20px; text-align: center; }}
         .box {{ max-width: 600px; margin: 0 auto; background: #1e293b; padding: 40px; border-radius: 12px; border: 1px solid #334155; }}
@@ -346,10 +346,10 @@ class UniversalPreviewHandler(http.server.BaseHTTPRequestHandler):
 </head>
 <body>
     <div class="box">
-        <h2>Recurso no encontrado</h2>
-        <p>La direccion <code>{url_path}</code> no esta en disco para <code>{target_domain}</code> ni pudo recuperarse.</p>
-        <a href="/" class="btn">← Volver al inicio</a>
-        <a href="/status" class="btn" style="background: #334155; margin-left: 10px;">Monitor Multi-Sitio</a>
+        <h2>Resource not found</h2>
+        <p>The address <code>{url_path}</code> is not saved on disk for <code>{target_domain}</code> and could not be recovered.</p>
+        <a href="/" class="btn">← Back to Home</a>
+        <a href="/status" class="btn" style="background: #334155; margin-left: 10px;">Multi-Site Monitor</a>
     </div>
 </body>
 </html>"""
@@ -365,18 +365,18 @@ def run_server(port: int = 8080):
     handler = UniversalPreviewHandler
     http.server.ThreadingHTTPServer.allow_reuse_address = True
     with http.server.ThreadingHTTPServer(("", port), handler) as httpd:
-        logger.success(f'Servidor local universal multihilo iniciado para {config.CURRENT_DOMAIN}')
-        logger.info(f'-> Web archivada: http://localhost:{port}/')
-        logger.info(f'-> Monitor de estado: http://localhost:{port}/status')
+        logger.success(f'Universal multithreaded local server started for {config.CURRENT_DOMAIN}')
+        logger.info(f'-> Preserved website: http://localhost:{port}/')
+        logger.info(f'-> Status monitor: http://localhost:{port}/status')
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:
-            logger.info('Servidor detenido por el usuario.')
+            logger.info('Server stopped by user.')
 
 def main():
     parser = argparse.ArgumentParser(description='Universal Web Archive Preview Server')
-    parser.add_argument('--domain', type=str, help='Dominio a servir (ej: criminalia.es, otra-web.org)')
-    parser.add_argument('--port', type=int, default=8080, help='Puerto local (por defecto: 8080)')
+    parser.add_argument('--domain', type=str, help='Domain to serve (e.g. criminalia.es, example.org)')
+    parser.add_argument('--port', type=int, default=8080, help='Local port (default: 8080)')
     args = parser.parse_args()
 
     if args.domain:

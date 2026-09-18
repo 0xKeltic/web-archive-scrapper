@@ -18,7 +18,7 @@ CDX_API_URL = 'https://web.archive.org/cdx/search/cdx'
 DEFAULT_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-    'Accept-Language': 'es-ES,es;q=0.8,en-US;q=0.5,en;q=0.3',
+    'Accept-Language': 'en-US,en;q=0.9',
     'Accept-Encoding': 'gzip, deflate',
 }
 
@@ -48,10 +48,10 @@ def get_latest_cdx_timestamp(domain: str) -> str:
             data = resp.json()
             if len(data) > 1 and len(data[1]) > 1:
                 ts = data[1][1]
-                logger.info(f'Timestamp detectado automaticamente en Wayback para {domain}: {ts}')
+                logger.info(f'Wayback snapshot timestamp automatically detected for {domain}: {ts}')
                 return ts
     except Exception as e:
-        logger.debug(f'No se pudo obtener timestamp de CDX ({e}), usando wildcard "2"')
+        logger.debug(f'Could not retrieve CDX timestamp ({e}), using wildcard "2"')
     return '2'
 
 def init_project(target_url: str, custom_timestamp: str = None, depth: int = 3, is_live: bool = False):
@@ -125,8 +125,8 @@ def init_project(target_url: str, custom_timestamp: str = None, depth: int = 3, 
     with open(DATA_DIR / 'active_project.json', 'w', encoding='utf-8') as f:
         json.dump(config_info, f, indent=2)
 
-    mode_label = "EN VIVO (Live Web)" if IS_LIVE_MODE else f"ARCHIVO HISTORICO (Wayback: {CURRENT_TIMESTAMP})"
-    logger.info(f'Proyecto inicializado [{mode_label}] para: {CURRENT_URL} (Directorio: {PROJECT_DATA_DIR})')
+    mode_label = "LIVE WEB" if IS_LIVE_MODE else f"HISTORICAL ARCHIVE (Wayback: {CURRENT_TIMESTAMP})"
+    logger.info(f'Project initialized [{mode_label}] for: {CURRENT_URL} (Directory: {PROJECT_DATA_DIR})')
     return config_info
 
 def load_active_project():
@@ -191,7 +191,7 @@ def url_to_relative_path(url: str) -> str:
         # Static file or other extension
         return f'{raw_path}{query_part}'
     else:
-        # Typical slug without extension (e.g. /asesino/ted-bundy or /contacto/)
+        # Typical slug without extension (e.g. /profile/ted-bundy or /contact/)
         return f'{raw_path}{query_part}.html'
 
 def fetch_single_request(url: str, is_binary: bool = False, max_retries: int = 3, backoff: float = 1.5, timeout: int = 20):
@@ -205,7 +205,7 @@ def fetch_single_request(url: str, is_binary: bool = False, max_retries: int = 3
                 return resp.text
             elif resp.status_code in (429, 503, 502, 504):
                 sleep_time = backoff * attempt
-                logger.warning(f'[{resp.status_code}] Servidor ocupado en {url}. Esperando {sleep_time:.1f}s...')
+                logger.warning(f'[{resp.status_code}] Server busy at {url}. Waiting {sleep_time:.1f}s...')
                 time.sleep(sleep_time)
             elif resp.status_code == 404:
                 return None
@@ -236,13 +236,13 @@ def fetch_from_archive_today(clean_url: str, is_binary: bool = False):
 
 def fetch_with_retry(url: str, is_binary: bool = False, max_retries: int = 3, backoff: float = 1.5, timeout: int = 20):
     """
-    Motor de Recuperacion en Cascada:
-    - Si IS_LIVE_MODE:
-      Peticion directa a clean_url, con fallback alternando protocolo (https <-> http).
-    - Si modo historico (3 Niveles Universal):
-      1. Tier 1: Snapshot seleccionado en modo RAW (id_)
-      2. Tier 2: Busqueda historica total (2id_) alternando esquemas http y https
-      3. Tier 3: Fallback a red archive.today / archive.is
+    Cascading Recovery Engine:
+    - If IS_LIVE_MODE:
+      Direct HTTP request to clean_url, with protocol swapping fallback (https <-> http).
+    - If Historical Archive Mode (3-Tier Universal):
+      1. Tier 1: Configured snapshot in RAW mode (id_), plus query-stripped retry.
+      2. Tier 2: Historical wildcard (2id_) with protocol swapping and query-stripped retry.
+      3. Tier 3: archive.today / archive.is preservation network fallback.
     """
     clean_url = clean_target_url(url)
     
@@ -251,7 +251,7 @@ def fetch_with_retry(url: str, is_binary: bool = False, max_retries: int = 3, ba
         if res is not None:
             return res
 
-        # Alternar protocolo http/https
+        # Protocol swap fallback
         if clean_url.startswith('https://'):
             alt_scheme = 'http://' + clean_url[8:]
         else:
@@ -260,54 +260,54 @@ def fetch_with_retry(url: str, is_binary: bool = False, max_retries: int = 3, ba
         if res is not None:
             return res
 
-        logger.debug(f'[404 Live] Recurso no accesible en vivo: {clean_url}')
+        logger.debug(f'[404 Live] Resource unreachable live: {clean_url}')
         return None
 
-    # 1. TIER 1: Wayback Machine en timestamp configurado
+    # 1. TIER 1: Wayback Machine at configured snapshot timestamp
     wb_target = f'{WAYBACK_RAW_PREFIX}{clean_url}'
     res = fetch_single_request(wb_target, is_binary=is_binary, max_retries=max_retries, backoff=backoff, timeout=timeout)
     if res is not None:
         return res
 
-    # Tier 1b: Reintentar sin query string (ej: style.css?ver=1.33 -> style.css)
+    # Tier 1b: Retry without query string (e.g. style.css?ver=1.33 -> style.css)
     if '?' in clean_url:
         no_query_url = clean_url.split('?')[0]
         res = fetch_single_request(f'{WAYBACK_RAW_PREFIX}{no_query_url}', is_binary=is_binary, max_retries=max_retries, timeout=timeout)
         if res is not None:
             return res
 
-    # 2. TIER 2: Wayback Machine Historico Total (2id_)
+    # 2. TIER 2: Wayback Machine Full Historical Wildcard (2id_)
     wb_historical = f'https://web.archive.org/web/2id_/{clean_url}'
     res = fetch_single_request(wb_historical, is_binary=is_binary, max_retries=2, backoff=backoff, timeout=timeout)
     if res is not None:
-        logger.debug(f'[Recuperado via Wayback Historico 2id_] {clean_url}')
+        logger.debug(f'[Recovered via Wayback Historical 2id_] {clean_url}')
         return res
         
-    # Tier 2b: Alternar protocolo http/https para capturas historicas
+    # Tier 2b: Protocol swap http/https for historical captures
     if clean_url.startswith('https://'):
         alt_scheme = 'http://' + clean_url[8:]
     else:
         alt_scheme = 'https://' + clean_url[7:]
     res = fetch_single_request(f'https://web.archive.org/web/2id_/{alt_scheme}', is_binary=is_binary, max_retries=2, timeout=timeout)
     if res is not None:
-        logger.debug(f'[Recuperado via Wayback Historico http-alt] {clean_url}')
+        logger.debug(f'[Recovered via Wayback Historical http-alt] {clean_url}')
         return res
 
-    # Tier 2c: Historico sin query string
+    # Tier 2c: Historical wildcard without query string
     if '?' in clean_url:
         no_query_url = clean_url.split('?')[0]
         res = fetch_single_request(f'https://web.archive.org/web/2id_/{no_query_url}', is_binary=is_binary, max_retries=2, timeout=timeout)
         if res is not None:
-            logger.debug(f'[Recuperado via Wayback Historico 2id_ no-query] {no_query_url}')
+            logger.debug(f'[Recovered via Wayback Historical 2id_ no-query] {no_query_url}')
             return res
 
     # 3. TIER 3: archive.today / archive.is / archive.ph
     res = fetch_from_archive_today(clean_url, is_binary=is_binary)
     if res is not None:
-        logger.info(f'[Recuperado via archive.is] {clean_url}')
+        logger.info(f'[Recovered via archive.today] {clean_url}')
         return res
 
-    logger.info(f'[404 Definitivo] No encontrado en ningun archivo: {clean_url}')
+    logger.info(f'[Terminal 404] Not found in any archive repository: {clean_url}')
     return None
 
 # Attempt loading active project from disk on startup
