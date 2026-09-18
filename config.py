@@ -42,8 +42,8 @@ CONTENT_DIR = PROJECT_DATA_DIR / 'content'
 def get_latest_cdx_timestamp(domain: str) -> str:
     """Queries Wayback CDX API to discover the latest valid 200 OK snapshot timestamp."""
     try:
-        query_url = f'{CDX_API_URL}?url={domain}&filter=statuscode:200&limit=1&fastLatest=true&output=json'
-        resp = SESSION.get(query_url, timeout=8)
+        query_url = f'{CDX_API_URL}?url={domain}&filter=statuscode:200&limit=1&sort=reverse&output=json'
+        resp = SESSION.get(query_url, timeout=12)
         if resp.status_code == 200:
             data = resp.json()
             if len(data) > 1 and len(data[1]) > 1:
@@ -269,6 +269,13 @@ def fetch_with_retry(url: str, is_binary: bool = False, max_retries: int = 3, ba
     if res is not None:
         return res
 
+    # Tier 1b: Reintentar sin query string (ej: style.css?ver=1.33 -> style.css)
+    if '?' in clean_url:
+        no_query_url = clean_url.split('?')[0]
+        res = fetch_single_request(f'{WAYBACK_RAW_PREFIX}{no_query_url}', is_binary=is_binary, max_retries=max_retries, timeout=timeout)
+        if res is not None:
+            return res
+
     # 2. TIER 2: Wayback Machine Historico Total (2id_)
     wb_historical = f'https://web.archive.org/web/2id_/{clean_url}'
     res = fetch_single_request(wb_historical, is_binary=is_binary, max_retries=2, backoff=backoff, timeout=timeout)
@@ -285,6 +292,14 @@ def fetch_with_retry(url: str, is_binary: bool = False, max_retries: int = 3, ba
     if res is not None:
         logger.debug(f'[Recuperado via Wayback Historico http-alt] {clean_url}')
         return res
+
+    # Tier 2c: Historico sin query string
+    if '?' in clean_url:
+        no_query_url = clean_url.split('?')[0]
+        res = fetch_single_request(f'https://web.archive.org/web/2id_/{no_query_url}', is_binary=is_binary, max_retries=2, timeout=timeout)
+        if res is not None:
+            logger.debug(f'[Recuperado via Wayback Historico 2id_ no-query] {no_query_url}')
+            return res
 
     # 3. TIER 3: archive.today / archive.is / archive.ph
     res = fetch_from_archive_today(clean_url, is_binary=is_binary)
