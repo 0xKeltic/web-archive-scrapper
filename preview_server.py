@@ -5,6 +5,7 @@ import os
 import re
 import argparse
 import mimetypes
+import json
 from urllib.parse import urlparse, parse_qs, unquote
 from pathlib import Path
 from loguru import logger
@@ -127,8 +128,8 @@ class UniversalPreviewHandler(http.server.BaseHTTPRequestHandler):
                             c = json.load(f)
                             is_live = c.get('is_live', False)
                             ts = c.get('timestamp', '')
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.warning(f'Error leyendo {cfg_file}: {e}')
 
                 pages_count = len(list((p / 'raw_html').rglob('*.html'))) if (p / 'raw_html').exists() else 0
                 assets_count = len(list((p / 'assets').rglob('*.*'))) if (p / 'assets').exists() else 0
