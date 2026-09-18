@@ -32,6 +32,27 @@ def rewrite_html_universal(html: str, domain: str) -> str:
     
     return html
 
+def set_active_project_context(domain: str):
+    """Dynamically activates project settings (is_live, timestamp, prefix) for the given domain."""
+    proj_dir = config.DATA_DIR / domain
+    cfg_file = proj_dir / 'project_config.json'
+    if cfg_file.exists():
+        try:
+            with open(cfg_file, 'r', encoding='utf-8') as f:
+                c = json.load(f)
+                config.CURRENT_URL = c.get('target_url', f'https://{domain}')
+                config.CURRENT_DOMAIN = c.get('domain', domain)
+                config.IS_LIVE_MODE = c.get('is_live', False)
+                config.CURRENT_TIMESTAMP = c.get('timestamp', '')
+                if config.IS_LIVE_MODE:
+                    config.WAYBACK_RAW_PREFIX = ''
+                else:
+                    ts = config.CURRENT_TIMESTAMP or '2'
+                    config.WAYBACK_RAW_PREFIX = f'https://web.archive.org/web/{ts}id_/'
+                return
+        except Exception:
+            pass
+
 class UniversalPreviewHandler(http.server.BaseHTTPRequestHandler):
     selected_domain = None
 
@@ -106,6 +127,7 @@ class UniversalPreviewHandler(http.server.BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         url_path = unquote(parsed.path)
         target_domain, new_cookie = self.get_target_domain()
+        set_active_project_context(target_domain)
 
         proj_dir = config.DATA_DIR / target_domain
         raw_html_dir = proj_dir / 'raw_html'
@@ -251,7 +273,7 @@ class UniversalPreviewHandler(http.server.BaseHTTPRequestHandler):
             # Dynamic on-the-fly rescue
             original_asset_url = f'https://{target_domain}/{rel_asset}'
             logger.info(f'[{target_domain}] [On-The-Fly Asset] Descargando recurso: {rel_asset}...')
-            data = config.fetch_with_retry(original_asset_url, is_binary=True)
+            data = config.fetch_with_retry(original_asset_url, is_binary=True, timeout=8)
             if data:
                 local_asset.parent.mkdir(parents=True, exist_ok=True)
                 local_asset.write_bytes(data)
@@ -291,7 +313,7 @@ class UniversalPreviewHandler(http.server.BaseHTTPRequestHandler):
         # 4. DYNAMIC CATCH-ALL ON-THE-FLY RESCUE
         full_target_url = f'https://{target_domain}{url_path}'
         logger.info(f'[{target_domain}] [On-The-Fly] Rescatando pagina: {full_target_url}...')
-        fetched_content = config.fetch_with_retry(full_target_url)
+        fetched_content = config.fetch_with_retry(full_target_url, timeout=8)
         if fetched_content and len(fetched_content) > 100:
             target_html_file = raw_html_dir / clean_rel
             target_html_file.parent.mkdir(parents=True, exist_ok=True)
