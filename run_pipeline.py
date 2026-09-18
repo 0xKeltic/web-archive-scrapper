@@ -28,10 +28,13 @@ def list_existing_projects():
 
 def show_project_status():
     """Displays stats of the currently active project."""
+    mode_str = "Web en Vivo (Live Web)" if config.IS_LIVE_MODE else f"Archivo Historico (Wayback: {config.CURRENT_TIMESTAMP})"
     logger.info(f"=== ESTADO DEL PROYECTO: {config.CURRENT_DOMAIN} ===")
+    logger.info(f"  Modo:             {mode_str}")
     logger.info(f"  URL Objetivo:     {config.CURRENT_URL}")
     logger.info(f"  Directorio:       {config.PROJECT_DATA_DIR}")
-    logger.info(f"  Wayback Prefix:   {config.WAYBACK_RAW_PREFIX}")
+    if not config.IS_LIVE_MODE:
+        logger.info(f"  Wayback Prefix:   {config.WAYBACK_RAW_PREFIX}")
     
     pages = len(list(config.RAW_HTML_DIR.rglob('*.html'))) if config.RAW_HTML_DIR.exists() else 0
     assets = len(list(config.ASSETS_DIR.rglob('*.*'))) if config.ASSETS_DIR.exists() else 0
@@ -44,12 +47,15 @@ def show_project_status():
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Universal Web Archive Scraper & Rebuilder Pipeline',
+        description='Universal Web Archive & Live Scraper Pipeline',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Ejemplos de uso:
-  # Archivar un sitio completo de inicio a fin:
+  # Archivar un sitio historico desde Wayback/Archive.ph:
   python run_pipeline.py --url https://ejemplo.com --all
+
+  # Descargar un sitio web en vivo directamente (Live Web):
+  python run_pipeline.py --url https://ejemplo.com --live --all
 
   # Archivar con fecha historica especifica de Wayback:
   python run_pipeline.py --url https://ejemplo.com --date 20200512 --all
@@ -70,7 +76,8 @@ Ejemplos de uso:
         """
     )
     
-    parser.add_argument('--url', type=str, help='URL del sitio web a archivar (ej: https://ejemplo.com)')
+    parser.add_argument('--url', type=str, help='URL del sitio web a scrappear o archivar (ej: https://ejemplo.com)')
+    parser.add_argument('--live', action='store_true', help='Modo web en vivo: descarga directamente del servidor activo en lugar de Wayback / Archive.ph')
     parser.add_argument('--date', '--timestamp', dest='date', type=str, help='Timestamp snapshot de Wayback (ej: 20230711 o 20230711124744). Si se omite, CDX detecta el mas reciente.')
     parser.add_argument('--depth', type=int, default=3, help='Profundidad maxima de rastreo recursivo BFS (por defecto: 3)')
     parser.add_argument('--max-pages', type=int, default=5000, help='Limite maximo de paginas a rastrear (por defecto: 5000)')
@@ -89,9 +96,11 @@ Ejemplos de uso:
 
     # Initialize or load project
     if args.url:
-        config.init_project(args.url, custom_timestamp=args.date, depth=args.depth)
+        config.init_project(args.url, custom_timestamp=args.date, depth=args.depth, is_live=args.live)
     else:
         active = config.load_active_project()
+        if active and args.live:
+            config.init_project(active['target_url'], custom_timestamp=args.date, depth=args.depth, is_live=True)
         if not active and not args.serve:
             logger.warning("No se proporciono --url y no hay ningun proyecto activo guardado.")
             list_existing_projects()

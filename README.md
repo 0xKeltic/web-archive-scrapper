@@ -11,6 +11,9 @@ Originalmente desarrollada y probada en producción con el rescate del 100% de l
 * **Universal y Agnóstica de Plataforma:**
   * Funciona con cualquier gestor de contenidos (WordPress, Drupal, Joomla, Ghost, sitios estáticos o hechos a medida).
   * Soporta múltiples webs archivadas simultáneamente en espacios aislados (`data/<dominio>/...`).
+* **Doble Modo de Operación (Archivo Histórico vs Web en Vivo):**
+  * **Modo Histórico (Por defecto):** Recupera snapshots del pasado en Wayback Machine y Archive.today mediante cascada inteligente.
+  * **Modo Web en Vivo (`--live`):** Descarga, replica y convierte webs vivas en tiempo real directamente desde su servidor activo, sin depender de archivos temporales.
 * **Descubrimiento Inteligente de URLs:**
   * **Detección de Sitemaps:** Localiza e ingiere automáticamente `/sitemap.xml`, `/sitemap_index.xml` y directivas en `/robots.txt` archivados.
   * **Crawler Recursivo por Grafos (BFS):** Rastrea enlaces internos nivel a nivel hasta la profundidad configurada (`--depth`).
@@ -46,10 +49,15 @@ pip install -r requirements.txt
 
 ## 💻 Uso de la CLI (`run_pipeline.py`)
 
-### 1. Archivar un Sitio Web Completo:
+### 1. Archivar o Scrappear un Sitio Web Completo:
 ```bash
-# Archiva cualquier web detectando automáticamente el snapshot más reciente en Wayback:
+# Modo Archivo Histórico (por defecto):
+# Detecta automáticamente el snapshot más reciente en Wayback y archive.today:
 python run_pipeline.py --url https://ejemplo.com --all
+
+# Modo Web en Vivo (--live):
+# Descarga directamente desde la web viva y activa (sin pasar por Wayback Machine):
+python run_pipeline.py --url https://ejemplo.com --live --all
 
 # Archivar con fecha histórica concreta de Wayback (ej: 12 de mayo de 2020):
 python run_pipeline.py --url https://ejemplo.com --date 20200512 --all

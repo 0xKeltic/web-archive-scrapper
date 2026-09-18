@@ -97,7 +97,7 @@ def scan_html_for_assets(domain: str, assets: dict) -> dict:
                 # 4. Favicons
                 for icon in soup.find_all('link', rel=lambda r: r and ('icon' in r or 'shortcut' in r)):
                     href = icon.get('href')
-                    if href:
+                    if href and not href.startswith('data:'):
                         clean = config.clean_target_url(href)
                         assets['images'].add(clean)
         except Exception:
@@ -107,13 +107,25 @@ def scan_html_for_assets(domain: str, assets: dict) -> dict:
 
 def main():
     domain = config.CURRENT_DOMAIN
-    assets = discover_assets_from_cdx(domain)
+    if config.IS_LIVE_MODE:
+        logger.info(f'Modo web en vivo activo: omitiendo API CDX de Wayback. Descubriendo assets desde HTMLs...')
+        assets = {
+            'css': set(),
+            'js': set(),
+            'images': set(),
+            'fonts': set(),
+            'other': set()
+        }
+    else:
+        assets = discover_assets_from_cdx(domain)
+
     assets = scan_html_for_assets(domain, assets)
     
     manifest_file = config.MANIFESTS_DIR / 'assets_manifest.json'
     export_data = {
         'domain': domain,
         'timestamp': config.CURRENT_TIMESTAMP,
+        'is_live': config.IS_LIVE_MODE,
         'total_assets': sum(len(v) for v in assets.values()),
         'assets': {k: sorted(list(v)) for k, v in assets.items()}
     }

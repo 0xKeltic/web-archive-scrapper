@@ -56,7 +56,8 @@ def parse_xml_sitemap(xml_text: str, domain: str) -> set:
     return urls
 
 def discover_sitemaps(domain: str) -> set:
-    logger.info(f'Buscando sitemaps y robots.txt en Wayback para {domain}...')
+    source_label = "en vivo" if config.IS_LIVE_MODE else "en Wayback"
+    logger.info(f'Buscando sitemaps y robots.txt {source_label} para {domain}...')
     discovered = set()
     
     for path in SITEMAP_CANDIDATES:
@@ -180,6 +181,7 @@ def crawl_site_bfs(start_url: str, max_depth: int = 3, max_pages: int = 5000):
         'target_url': config.CURRENT_URL,
         'domain': config.CURRENT_DOMAIN,
         'timestamp': config.CURRENT_TIMESTAMP,
+        'is_live': config.IS_LIVE_MODE,
         'total_pages': len(pages_catalog),
         'pages': pages_catalog,
     }

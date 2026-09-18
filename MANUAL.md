@@ -10,11 +10,14 @@ Websites frequently disappear due to domain expirations, censorship, lack of mai
 
 ### Core Capabilities:
 1. **Universal & CMS-Agnostic:** Operates without requiring prior knowledge of the site's underlying engine (WordPress, Drupal, Joomla, Ghost, custom PHP, or static HTML).
-2. **Autonomous URL Discovery:** Combines archived XML Sitemaps / `robots.txt` parsing with an adaptive Breadth-First Search (BFS) graph crawler.
-3. **Multi-Tier Cascading Fallback:** Mitigates temporal gaps and false 404 errors across multiple archive repositories.
-4. **Isolated Multi-Domain Workspaces:** Preserves multiple sites concurrently under isolated directories (`data/<domain_slug>/...`).
-5. **Intelligent Heuristic Content Extraction:** Employs readability algorithms (`trafilatura` + `markdownify`) to extract clean body text, titles, authors, and dates without hardcoded CSS selectors.
-6. **Local High-Fidelity Replica Server:** Re-serves any archived site locally with dynamic URL rewriting and on-the-fly missing asset rescue.
+2. **Dual Operation Modes (Archive vs. Live Web):**
+   - **Archive Mode (Default):** Rebuilds fallen sites from Wayback Machine and archive.today snapshots.
+   - **Live Web Mode (`--live`):** Directly scrapes, mirrors, and parses active, live websites without passing through Internet Archive intermediaries.
+3. **Autonomous URL Discovery:** Combines XML Sitemaps / `robots.txt` parsing with an adaptive Breadth-First Search (BFS) graph crawler.
+4. **Multi-Tier Cascading Fallback:** Mitigates temporal gaps and false 404 errors across multiple archive repositories (in archive mode).
+5. **Isolated Multi-Domain Workspaces:** Preserves multiple sites concurrently under isolated directories (`data/<domain_slug>/...`).
+6. **Intelligent Heuristic Content Extraction:** Employs readability algorithms (`trafilatura` + `markdownify`) to extract clean body text, titles, authors, and dates without hardcoded CSS selectors.
+7. **Local High-Fidelity Replica Server:** Re-serves any archived or scraped site locally with dynamic URL rewriting and on-the-fly missing asset rescue.
 
 ---
 
@@ -208,8 +211,11 @@ Markdown body content with local image links:
 ## 6. CLI Reference (`run_pipeline.py`)
 
 ```bash
-# Archive any website end-to-end:
+# Archive any fallen website from Wayback Machine / archive.today (Default):
 python run_pipeline.py --url https://example.com --all
+
+# Scrape an active, live website directly (Live Web Mode):
+python run_pipeline.py --url https://example.com --live --all
 
 # Archive with explicit historical snapshot timestamp:
 python run_pipeline.py --url https://example.com --date 20210615 --all

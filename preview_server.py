@@ -197,7 +197,8 @@ class UniversalPreviewHandler(http.server.BaseHTTPRequestHandler):
 
         # 4. DYNAMIC CATCH-ALL ON-THE-FLY RESCUE
         full_target_url = f'https://{config.CURRENT_DOMAIN}{url_path}'
-        logger.info(f'[On-The-Fly] Rescatando pagina en vivo desde Wayback: {full_target_url}...')
+        source_label = "servidor en vivo" if config.IS_LIVE_MODE else "Wayback"
+        logger.info(f'[On-The-Fly] Rescatando pagina desde {source_label}: {full_target_url}...')
         fetched_content = config.fetch_with_retry(full_target_url)
         if fetched_content and len(fetched_content) > 100:
             target_html_file = config.RAW_HTML_DIR / clean_rel

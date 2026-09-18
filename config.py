@@ -30,6 +30,7 @@ CURRENT_URL = 'https://criminalia.es'
 CURRENT_DOMAIN = 'criminalia.es'
 DOMAIN_SLUG = 'criminalia.es'
 CURRENT_TIMESTAMP = '20230711124744'
+IS_LIVE_MODE = False
 WAYBACK_RAW_PREFIX = f'https://web.archive.org/web/{CURRENT_TIMESTAMP}id_/'
 
 PROJECT_DATA_DIR = DATA_DIR / DOMAIN_SLUG
@@ -53,12 +54,13 @@ def get_latest_cdx_timestamp(domain: str) -> str:
         logger.debug(f'No se pudo obtener timestamp de CDX ({e}), usando wildcard "2"')
     return '2'
 
-def init_project(target_url: str, custom_timestamp: str = None, depth: int = 3):
+def init_project(target_url: str, custom_timestamp: str = None, depth: int = 3, is_live: bool = False):
     """Initializes project workspace dynamically for any given target URL."""
-    global CURRENT_URL, CURRENT_DOMAIN, DOMAIN_SLUG, CURRENT_TIMESTAMP, WAYBACK_RAW_PREFIX
+    global CURRENT_URL, CURRENT_DOMAIN, DOMAIN_SLUG, CURRENT_TIMESTAMP, WAYBACK_RAW_PREFIX, IS_LIVE_MODE
     global PROJECT_DATA_DIR, MANIFESTS_DIR, RAW_HTML_DIR, ASSETS_DIR, CONTENT_DIR
 
     target_url = target_url.strip()
+    IS_LIVE_MODE = bool(is_live)
     
     # Handle direct Wayback Machine URLs (e.g., https://web.archive.org/web/20230711124744/https://ejemplo.com)
     wb_match = re.search(r'https?://web\.archive\.org/web/(\d+)[a-z_]*/(https?://.+)', target_url)
@@ -89,12 +91,15 @@ def init_project(target_url: str, custom_timestamp: str = None, depth: int = 3):
     CURRENT_DOMAIN = domain
     DOMAIN_SLUG = re.sub(r'[^a-zA-Z0-9.-]', '_', domain)
 
-    if custom_timestamp:
-        CURRENT_TIMESTAMP = str(custom_timestamp).strip()
+    if IS_LIVE_MODE:
+        CURRENT_TIMESTAMP = 'live'
+        WAYBACK_RAW_PREFIX = ''
     else:
-        CURRENT_TIMESTAMP = get_latest_cdx_timestamp(domain)
-
-    WAYBACK_RAW_PREFIX = f'https://web.archive.org/web/{CURRENT_TIMESTAMP}id_/'
+        if custom_timestamp:
+            CURRENT_TIMESTAMP = str(custom_timestamp).strip()
+        else:
+            CURRENT_TIMESTAMP = get_latest_cdx_timestamp(domain)
+        WAYBACK_RAW_PREFIX = f'https://web.archive.org/web/{CURRENT_TIMESTAMP}id_/'
 
     PROJECT_DATA_DIR = DATA_DIR / DOMAIN_SLUG
     MANIFESTS_DIR = PROJECT_DATA_DIR / 'manifests'
@@ -111,6 +116,7 @@ def init_project(target_url: str, custom_timestamp: str = None, depth: int = 3):
         'domain_slug': DOMAIN_SLUG,
         'timestamp': CURRENT_TIMESTAMP,
         'depth': depth,
+        'is_live': IS_LIVE_MODE,
         'last_used': time.time(),
     }
     with open(PROJECT_DATA_DIR / 'project_config.json', 'w', encoding='utf-8') as f:
@@ -119,7 +125,8 @@ def init_project(target_url: str, custom_timestamp: str = None, depth: int = 3):
     with open(DATA_DIR / 'active_project.json', 'w', encoding='utf-8') as f:
         json.dump(config_info, f, indent=2)
 
-    logger.info(f'Proyecto inicializado para: {CURRENT_URL} (Directorio: {PROJECT_DATA_DIR})')
+    mode_label = "EN VIVO (Live Web)" if IS_LIVE_MODE else f"ARCHIVO HISTORICO (Wayback: {CURRENT_TIMESTAMP})"
+    logger.info(f'Proyecto inicializado [{mode_label}] para: {CURRENT_URL} (Directorio: {PROJECT_DATA_DIR})')
     return config_info
 
 def load_active_project():
@@ -129,7 +136,12 @@ def load_active_project():
         try:
             with open(active_file, 'r', encoding='utf-8') as f:
                 info = json.load(f)
-                init_project(info['target_url'], info.get('timestamp'), info.get('depth', 3))
+                init_project(
+                    info['target_url'],
+                    info.get('timestamp') if info.get('timestamp') != 'live' else None,
+                    info.get('depth', 3),
+                    is_live=info.get('is_live', False)
+                )
                 return info
         except Exception:
             pass
@@ -224,13 +236,33 @@ def fetch_from_archive_today(clean_url: str, is_binary: bool = False):
 
 def fetch_with_retry(url: str, is_binary: bool = False, max_retries: int = 3, backoff: float = 1.5, timeout: int = 20):
     """
-    Motor de Recuperacion en Cascada (3 Niveles Universal):
-    1. Tier 1: Snapshot seleccionado en modo RAW (id_)
-    2. Tier 2: Busqueda historica total (2id_) alternando esquemas http y https
-    3. Tier 3: Fallback a red archive.today / archive.is
+    Motor de Recuperacion en Cascada:
+    - Si IS_LIVE_MODE:
+      Peticion directa a clean_url, con fallback alternando protocolo (https <-> http).
+    - Si modo historico (3 Niveles Universal):
+      1. Tier 1: Snapshot seleccionado en modo RAW (id_)
+      2. Tier 2: Busqueda historica total (2id_) alternando esquemas http y https
+      3. Tier 3: Fallback a red archive.today / archive.is
     """
     clean_url = clean_target_url(url)
     
+    if IS_LIVE_MODE:
+        res = fetch_single_request(clean_url, is_binary=is_binary, max_retries=max_retries, backoff=backoff, timeout=timeout)
+        if res is not None:
+            return res
+
+        # Alternar protocolo http/https
+        if clean_url.startswith('https://'):
+            alt_scheme = 'http://' + clean_url[8:]
+        else:
+            alt_scheme = 'https://' + clean_url[7:]
+        res = fetch_single_request(alt_scheme, is_binary=is_binary, max_retries=max_retries, backoff=backoff, timeout=timeout)
+        if res is not None:
+            return res
+
+        logger.debug(f'[404 Live] Recurso no accesible en vivo: {clean_url}')
+        return None
+
     # 1. TIER 1: Wayback Machine en timestamp configurado
     wb_target = f'{WAYBACK_RAW_PREFIX}{clean_url}'
     res = fetch_single_request(wb_target, is_binary=is_binary, max_retries=max_retries, backoff=backoff, timeout=timeout)
