@@ -62,18 +62,30 @@ class UniversalPreviewHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         logger.debug(f'[{self.command}] {self.path} - {args[1] if len(args) > 1 else ""}')
 
+    @classmethod
+    def get_valid_projects(cls):
+        """Returns directories in DATA_DIR that contain valid scraped website data, ignoring dummy/empty dirs."""
+        valid = []
+        if config.DATA_DIR.exists():
+            for d in config.DATA_DIR.iterdir():
+                if not d.is_dir() or d.name == 'example.com':
+                    continue
+                raw_html = d / 'raw_html'
+                cfg = d / 'project_config.json'
+                has_html = raw_html.exists() and any(raw_html.iterdir())
+                if has_html or cfg.exists():
+                    valid.append(d)
+        return sorted(valid, key=lambda x: x.name)
+
     def get_target_domain(self):
         parsed = urlparse(self.path)
         qs = parse_qs(parsed.query)
         site = None
-        new_cookie = None
 
         if 'site' in qs and qs['site'][0]:
             site = qs['site'][0].strip().lower()
-            new_cookie = f'active_site={site}; Path=/; SameSite=Lax'
         elif 'domain' in qs and qs['domain'][0]:
             site = qs['domain'][0].strip().lower()
-            new_cookie = f'active_site={site}; Path=/; SameSite=Lax'
 
         if not site:
             cookie_hdr = self.headers.get('Cookie', '')
@@ -86,13 +98,17 @@ class UniversalPreviewHandler(http.server.BaseHTTPRequestHandler):
         if not site and UniversalPreviewHandler.selected_domain:
             site = UniversalPreviewHandler.selected_domain
 
-        projects = [d.name for d in config.DATA_DIR.iterdir() if d.is_dir()] if config.DATA_DIR.exists() else []
-        if not site or (projects and site not in projects):
-            if projects:
-                site = projects[0]
+        if site == 'example.com':
+            site = None
+
+        valid_projects = [d.name for d in self.get_valid_projects()]
+        if not site or (valid_projects and site not in valid_projects):
+            if valid_projects:
+                site = valid_projects[0]
             else:
                 site = config.CURRENT_DOMAIN
 
+        new_cookie = f'active_site={site}; Path=/; SameSite=Lax'
         UniversalPreviewHandler.selected_domain = site
         return site, new_cookie
 
@@ -136,10 +152,10 @@ class UniversalPreviewHandler(http.server.BaseHTTPRequestHandler):
 
         # 1. MULTI-SITE LIVE STATUS DASHBOARD (/status)
         if url_path in ('/status', '/progreso'):
-            projects = [d for d in config.DATA_DIR.iterdir() if d.is_dir()] if config.DATA_DIR.exists() else []
+            projects = self.get_valid_projects()
             cards_html = []
 
-            for p in sorted(projects, key=lambda x: x.name):
+            for p in projects:
                 domain_name = p.name
                 cfg_file = p / 'project_config.json'
                 is_live = False
@@ -311,6 +327,10 @@ class UniversalPreviewHandler(http.server.BaseHTTPRequestHandler):
                     return
 
         # 4. DYNAMIC CATCH-ALL ON-THE-FLY RESCUE
+        if target_domain == 'example.com':
+            self.send_error(404, 'example.com is a placeholder and cannot be rescued.')
+            return
+
         full_target_url = f'https://{target_domain}{url_path}'
         logger.info(f'[{target_domain}] [On-The-Fly] Rescuing page: {full_target_url}...')
         fetched_content = config.fetch_with_retry(full_target_url, timeout=8)
@@ -365,7 +385,9 @@ def run_server(port: int = 8080):
     handler = UniversalPreviewHandler
     http.server.ThreadingHTTPServer.allow_reuse_address = True
     with http.server.ThreadingHTTPServer(("", port), handler) as httpd:
-        logger.success(f'Universal multithreaded local server started for {config.CURRENT_DOMAIN}')
+        valid = UniversalPreviewHandler.get_valid_projects()
+        active_display = valid[0].name if valid else config.CURRENT_DOMAIN
+        logger.success(f'Universal multithreaded local server started for {active_display}')
         logger.info(f'-> Preserved website: http://localhost:{port}/')
         logger.info(f'-> Status monitor: http://localhost:{port}/status')
         try:
