@@ -24,6 +24,9 @@ DEFAULT_HEADERS = {
 
 SESSION = requests.Session()
 SESSION.headers.update(DEFAULT_HEADERS)
+adapter = requests.adapters.HTTPAdapter(pool_connections=30, pool_maxsize=30, max_retries=2)
+SESSION.mount('http://', adapter)
+SESSION.mount('https://', adapter)
 
 # Active Project State (Dynamic)
 CURRENT_URL = 'https://example.com'

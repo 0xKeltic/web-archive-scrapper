@@ -82,6 +82,8 @@ Usage Examples:
     parser.add_argument('--depth', type=int, default=3, help='Maximum recursive BFS crawling depth (default: 3)')
     parser.add_argument('--max-pages', type=int, default=5000, help='Maximum number of pages to crawl (default: 5000)')
     parser.add_argument('--step', type=int, choices=[1, 2, 3, 4, 5], help='Execute a specific step (1: Crawler, 2: Assets, 3: HTMLs, 4: Download Assets, 5: Markdown)')
+    parser.add_argument('--from-step', type=int, choices=[1, 2, 3, 4, 5], help='Start execution from this step onwards (e.g. --from-step 4 executes steps 4 and 5)')
+    parser.add_argument('--threads', type=int, default=None, help='Concurrency worker threads for downloads (default: 8 in live mode, 3 in archive mode)')
     parser.add_argument('--all', action='store_true', help='Execute steps 1 through 5 sequentially')
     parser.add_argument('--serve', action='store_true', help='Start local preview server proxy')
     parser.add_argument('--port', type=int, default=8080, help='Port for the preview server (default: 8080)')
@@ -109,31 +111,37 @@ Usage Examples:
 
     if args.status:
         show_project_status()
-        if not (args.step or args.all or args.serve):
+        if not (args.step or args.all or args.from_step or args.serve):
             return
 
     # Step Execution
-    if args.step == 1 or args.all:
+    run_step1 = args.step == 1 or args.all or (args.from_step and args.from_step <= 1)
+    run_step2 = args.step == 2 or args.all or (args.from_step and args.from_step <= 2)
+    run_step3 = args.step == 3 or args.all or (args.from_step and args.from_step <= 3)
+    run_step4 = args.step == 4 or args.all or (args.from_step and args.from_step <= 4)
+    run_step5 = args.step == 5 or args.all or (args.from_step and args.from_step <= 5)
+
+    if run_step1:
         logger.info(f">>> STEP 1: BFS crawl & URL discovery for {config.CURRENT_DOMAIN}...")
         step1 = importlib.import_module('01_crawler')
         step1.crawl_site_bfs(config.CURRENT_URL, max_depth=args.depth, max_pages=args.max_pages)
 
-    if args.step == 2 or args.all:
+    if run_step2:
         logger.info(f">>> STEP 2: Discovering static assets (CSS, JS, Fonts, Images)...")
         step2 = importlib.import_module('02_discover_assets')
         step2.main()
 
-    if args.step == 3 or args.all:
+    if run_step3:
         logger.info(f">>> STEP 3: Downloading HTML pages to {config.RAW_HTML_DIR}...")
         step3 = importlib.import_module('03_download_html')
         step3.download_all_pages()
 
-    if args.step == 4 or args.all:
+    if run_step4:
         logger.info(f">>> STEP 4: Downloading static files to {config.ASSETS_DIR}...")
         step4 = importlib.import_module('04_download_assets')
-        step4.download_all_assets()
+        step4.download_all_assets(max_workers=args.threads)
 
-    if args.step == 5 or args.all:
+    if run_step5:
         logger.info(f">>> STEP 5: Parsing heuristic content to Markdown & JSON in {config.CONTENT_DIR}...")
         step5 = importlib.import_module('05_parse_articles')
         step5.export_all()
@@ -143,7 +151,7 @@ Usage Examples:
         preview = importlib.import_module('preview_server')
         preview.run_server(port=args.port)
 
-    if not args.step and not args.all and not args.serve and not args.status:
+    if not args.step and not args.all and not args.from_step and not args.serve and not args.status:
         show_project_status()
         logger.info("To run the complete pipeline use: python run_pipeline.py --all")
 
