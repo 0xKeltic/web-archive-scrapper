@@ -383,7 +383,7 @@ class UniversalPreviewHandler(http.server.BaseHTTPRequestHandler):
 
 def run_server(port: int = 8080):
     handler = UniversalPreviewHandler
-    http.server.ThreadingHTTPServer.allow_reuse_address = True
+    http.server.ThreadingHTTPServer.allow_reuse_address = (os.name != 'nt')
     with http.server.ThreadingHTTPServer(("", port), handler) as httpd:
         valid = UniversalPreviewHandler.get_valid_projects()
         active_display = valid[0].name if valid else config.CURRENT_DOMAIN
