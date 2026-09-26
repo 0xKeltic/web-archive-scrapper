@@ -1,3 +1,6 @@
+<img width="1536" height="1024" alt="imagen" src="https://github.com/user-attachments/assets/9ca9a9b7-e5f7-49fc-a98f-66a7c08e52a0" />
+
+
 # 🌐 Universal Web Archive Scraper & Rebuilder Suite
 
 A universal digital preservation and archival recovery tool engineered to systematically rescue, locally reconstruct, and convert **any fallen or live website** into structured Markdown from **The Internet Archive (Wayback Machine)**, secondary preservation networks like **archive.today (archive.ph)**, or **active live web servers**.
